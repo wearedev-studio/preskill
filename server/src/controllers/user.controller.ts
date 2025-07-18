@@ -1,0 +1,125 @@
+// Import Engine
+import { Request, Response } from 'express';
+
+// Import Models
+import GameRecord from '../models/GameRecord.model';
+import Transaction from '../models/Transaction.model';
+import User from '../models/User.model';
+
+// @desc    Get user profile
+// @route   GET /api/users/profile
+// @access  Private
+export const getUserProfile = (req: Request, res: Response) => {
+  // Middleware `protect` уже нашел пользователя и добавил его в req.user
+  if (req.user) {
+    res.json({
+      _id: req.user._id,
+      username: req.user.username,
+      email: req.user.email,
+      balance: req.user.balance,
+      avatar: req.user.avatar,
+    });
+  } else {
+    // Эта ситуация маловероятна, если `protect` отработал корректно
+    res.status(404).json({ message: 'User not found' });
+  }
+};
+
+// @desc    Get user's game history
+// @route   GET /api/users/history/games
+// @access  Private
+export const getGameHistory = async (req: Request, res: Response) => {
+  try {
+    const gameHistory = await GameRecord.find({ user: req.user?._id })
+      .sort({ createdAt: -1 }); // Сортируем от новых к старым
+    res.json(gameHistory);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Get user's transaction history
+// @route   GET /api/users/history/transactions
+// @access  Private
+export const getTransactionHistory = async (req: Request, res: Response) => {
+  try {
+    const transactionHistory = await Transaction.find({ user: req.user?._id })
+      .sort({ createdAt: -1 });
+    res.json(transactionHistory);
+  } catch (error: any) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Update user password
+// @route   PUT /api/users/profile/password
+// @access  Private
+export const updateUserPassword = async (req: Request, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ message: 'Please provide current and new passwords' });
+  }
+
+  try {
+    // 1. Находим пользователя, но в этот раз запрашиваем и его пароль
+    const user = await User.findById(req.user?._id).select('+password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // 2. Проверяем, совпадает ли введенный текущий пароль с паролем в БД
+    if (!(await user.comparePassword(currentPassword))) {
+      return res.status(401).json({ message: 'Incorrect current password' });
+    }
+
+    // 3. Если все верно, обновляем пароль и сохраняем
+    user.password = newPassword;
+    await user.save(); // pre-save хук захеширует новый пароль
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// @desc    Update user balance (deposit/withdraw mock)
+// @route   POST /api/users/balance
+// @access  Private
+export const updateUserBalance = async (req: Request, res: Response) => {
+  const { amount } = req.body;
+  const numericAmount = Number(amount);
+
+  if (isNaN(numericAmount) || numericAmount === 0) {
+    return res.status(400).json({ message: 'Invalid amount provided' });
+  }
+  
+  const user = req.user!; // Мы уверены, что user есть, благодаря middleware `protect`
+
+  // Проверка на достаточность средств при выводе
+  if (numericAmount < 0 && user.balance < Math.abs(numericAmount)) {
+    return res.status(400).json({ message: 'Insufficient funds for withdrawal' });
+  }
+
+  // Обновляем баланс
+  user.balance += numericAmount;
+  await user.save();
+
+  // Создаем запись о транзакции
+  await Transaction.create({
+    user: user._id,
+    type: numericAmount > 0 ? 'DEPOSIT' : 'WITHDRAWAL',
+    amount: Math.abs(numericAmount), // Сумма в транзакции всегда положительная
+    status: 'COMPLETED',
+  });
+
+  // Возвращаем обновленные данные пользователя
+  res.json({
+    _id: user._id,
+    username: user.username,
+    email: user.email,
+    balance: user.balance,
+    avatar: user.avatar,
+  });
+};
