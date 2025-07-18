@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 // gameType должен совпадать с ключами в gameLogics на бэкенде
 const games = [
     { name: 'Крестики-нолики', gameType: 'tic-tac-toe', status: 'Доступно' },
-    { name: 'Шашки', gameType: 'checkers', status: 'В разработке' },
+    { name: 'Шашки', gameType: 'checkers', status: 'Доступно' }, // ИЗМЕНЕНО
     { name: 'Шахматы', gameType: 'chess', status: 'В разработке' },
     { name: 'Нарды', gameType: 'backgammon', status: 'В разработке' },
 ];

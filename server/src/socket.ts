@@ -5,6 +5,8 @@ import GameRecord from './models/GameRecord.model';
 import Transaction from './models/Transaction.model';
 import { IGameLogic, GameState, GameMove } from './games/game.logic.interface';
 import { ticTacToeLogic } from './games/tic-tac-toe.logic';
+import { checkersLogic } from './games/checkers.logic'; // 1. ИМПОРТИРУЕМ новую логику
+
 
 // ==================================
 // Типы данных
@@ -32,7 +34,7 @@ const userSocketMap: Record<string, string> = {};
 
 const gameLogics: Record<Room['gameType'], IGameLogic> = {
     'tic-tac-toe': ticTacToeLogic,
-    'checkers': {} as IGameLogic,
+    'checkers': checkersLogic,
     'chess': {} as IGameLogic,
     'backgammon': {} as IGameLogic,
 };
@@ -225,51 +227,269 @@ export default function initializeSocket(io: Server) {
             broadcastLobbyState(io, room.gameType);
         });
 
-        socket.on('playerMove', ({ roomId, move }: { roomId: string, move: GameMove }) => {
-            const room = rooms[roomId];
-            if (!room || room.players.length < 2) return;
+        // socket.on('playerMove', ({ roomId, move }: { roomId: string, move: GameMove }) => {
+        //     const room = rooms[roomId];
+        //     // @ts-ignore
+        //     const currentPlayerId = initialUser._id.toString();
+
+        //     // --- 1. Базовые проверки ---
+        //     if (!room) return;
+        //     if (room.players.length < 2) return socket.emit('error', { message: "Дождитесь второго игрока." });
+        //     if (room.gameState.turn !== currentPlayerId) return socket.emit('error', { message: "Сейчас не ваш ход." });
+
+        //     const gameLogic = gameLogics[room.gameType];
             
-            const gameLogic = gameLogics[room.gameType];
+        //     // --- 2. Обработка хода с помощью модуля игры ---
+        //     const { newState, error, turnShouldSwitch } = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
+            
+        //     if (error) return socket.emit('error', { message: error });
+
+        //     // --- 3. Обновление состояния и определение следующего игрока ---
+        //     room.gameState = newState;
+        //     let nextPlayerId: string;
+            
+        //     if (turnShouldSwitch) {
+        //         // @ts-ignore
+        //         const nextPlayerObject = room.players.find(p => p.user._id.toString() !== currentPlayerId)!;
+        //         // @ts-ignore
+        //         nextPlayerId = nextPlayerObject.user._id.toString();
+        //         room.gameState.turn = nextPlayerId;
+        //     } else {
+        //         nextPlayerId = currentPlayerId; // Ход остается у текущего игрока
+        //     }
+            
+        //     // --- 4. Проверка на конец игры ---
+        //     const gameResult = gameLogic.checkGameEnd(room.gameState, room.players, nextPlayerId);
+        //     if (gameResult.isGameOver) {
+        //         return endGame(io, room, gameResult.winnerId, gameResult.isDraw);
+        //     }
+            
+        //     // --- 5. Отправка обновления всем игрокам ---
+        //     io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+
+        //     // --- 6. Логика для хода бота (если применимо) ---
+        //     // @ts-ignore
+        //     const nextPlayerObject = room.players.find(p => p.user._id.toString() === nextPlayerId)!;
+        //     if (isBot(nextPlayerObject) && turnShouldSwitch) {
+        //         setTimeout(() => {
+        //             // Используем `async` IIFE (Immediately Invoked Function Expression) для работы с асинхронностью
+        //             (async () => {
+        //                 let currentRoom = rooms[roomId];
+        //                 if (!currentRoom) return;
+
+        //                 let botTurnShouldSwitch = false;
+        //                 let safetyBreak = 0; // Защита от бесконечного цикла
+
+        //                 // Начинаем цикл ходов бота
+        //                 while (!botTurnShouldSwitch && safetyBreak < 10) {
+        //                     safetyBreak++;
+                            
+        //                     const botPlayerIndex = currentRoom.players.findIndex(p => isBot(p)) as 0 | 1;
+        //                     const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
+                            
+        //                     if (!botMove || Object.keys(botMove).length === 0) break; // Если боту некуда ходить
+
+        //                     const botProcessResult = gameLogic.processMove(
+        //                         currentRoom.gameState,
+        //                         botMove,
+        //                         // @ts-ignore
+        //                         nextPlayerObject.user._id.toString(),
+        //                         currentRoom.players
+        //                     );
+
+        //                     if (botProcessResult.error) break;
+
+        //                     currentRoom.gameState = botProcessResult.newState;
+        //                     botTurnShouldSwitch = botProcessResult.turnShouldSwitch;
+
+        //                     // Проверяем конец игры после каждого мини-хода бота
+        //                     const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, currentRoom.players, currentRoom.gameState.turn);
+        //                     if (botGameResult.isGameOver) {
+        //                         return endGame(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
+        //                     }
+        //                 }
+
+        //                 // Когда цикл ходов бота завершен, передаем ход человеку
+        //                 const humanPlayer = currentRoom.players.find(p => !isBot(p))!;
+        //                 // @ts-ignore
+        //                 currentRoom.gameState.turn = humanPlayer.user._id.toString();
+
+        //                 // Отправляем финальное состояние доски после всей серии ходов бота
+        //                 io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+
+        //             })();
+        //         }, 1500);
+        //     }
+        // });
+
+        socket.on('playerMove', ({ roomId, move }: { roomId: string, move: GameMove }) => {
+            // const room = rooms[roomId];
+            // // @ts-ignore
+            // const currentPlayerId = initialUser._id.toString();
+
+            // if (!room || room.players.length < 2 || room.gameState.turn !== currentPlayerId) return;
+
+            // const gameLogic = gameLogics[room.gameType];
+            
+            // const { newState, error, turnShouldSwitch } = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
+            
+            // if (error) return socket.emit('error', { message: error });
+
+            // room.gameState = newState;
+            
+            // // Проверяем конец игры СРАЗУ после хода текущего игрока
+            // let gameResult = gameLogic.checkGameEnd(room.gameState, room.players);
+            // if (gameResult.isGameOver) {
+            //     return endGame(io, room, gameResult.winnerId, gameResult.isDraw);
+            // }
+            
+            // // Определяем следующего игрока
+            // // @ts-ignore
+            // const nextPlayer = room.players.find(p => p.user._id.toString() !== currentPlayerId)!;
+            
+            // if (turnShouldSwitch) {
+            //     // @ts-ignore
+            //     room.gameState.turn = nextPlayer.user._id.toString();
+            // } else {
+            //     // Ход остается у текущего игрока (для серийных взятий в шашках)
+            //     room.gameState.turn = currentPlayerId;
+            // }
+            
+            // io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+
+            const room = rooms[roomId];
             // @ts-ignore
             const currentPlayerId = initialUser._id.toString();
-            if (room.gameState.turn !== currentPlayerId) return;
-            
-            const { newState, error } = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
-            if (error) return socket.emit('error', { message: error });
-            // @ts-ignore
-            const nextPlayer = room.players.find(p => p.user._id.toString() !== currentPlayerId)!;
-            // @ts-ignore
-            newState.turn = nextPlayer.user._id.toString();
-            room.gameState = newState;
 
-            const gameResult = gameLogic.checkGameEnd(room.gameState, room.players);
-            if (gameResult.isGameOver) return endGame(io, room, gameResult.winnerId, gameResult.isDraw);
+            if (!room || room.players.length < 2 || room.gameState.turn !== currentPlayerId) return;
+
+            const gameLogic = gameLogics[room.gameType];
             
+            // 1. Просто получаем новое состояние от модуля игры
+            const { newState, error, turnShouldSwitch } = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
+            
+            if (error) return socket.emit('error', { message: error });
+
+            // 2. Просто применяем это новое состояние
+            room.gameState = newState;
+            
+            // 3. Проверяем на конец игры
+            let gameResult = gameLogic.checkGameEnd(room.gameState, room.players);
+            if (gameResult.isGameOver) {
+                return endGame(io, room, gameResult.winnerId, gameResult.isDraw);
+            }
+            
+            // 4. Отправляем обновление
             io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
 
-            if (isBot(nextPlayer)) {
+            // 5. Логика бота
+            // @ts-ignore
+            const nextPlayer = room.players.find(p => p.user._id.toString() === room.gameState.turn)!;
+            
+
+            // Логика бота
+            if (isBot(nextPlayer) && turnShouldSwitch) {
                 setTimeout(() => {
-                    const currentRoom = rooms[roomId];
-                    if (!currentRoom) return;
-                    const botMove = gameLogic.makeBotMove(currentRoom.gameState);
-                    // @ts-ignore
-                    const { newState: botState, error: botError } = gameLogic.processMove(currentRoom.gameState, botMove, nextPlayer.user._id.toString(), currentRoom.players);
-                    if (botError) return;
+                    (async () => {
+                        let currentRoom = rooms[roomId];
+                        if (!currentRoom) return;
 
-                    const humanPlayer = currentRoom.players.find(p => !isBot(p))!;
-                    // @ts-ignore
-                    botState.turn = humanPlayer.user._id.toString();
-                    currentRoom.gameState = botState;
+                        let botCanMove = true;
+                        let safetyBreak = 0;
 
-                    const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, currentRoom.players);
-                    if (botGameResult.isGameOver) {
-                        endGame(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
-                    } else {
+                        while (botCanMove && safetyBreak < 10) {
+                            safetyBreak++;
+                            
+                            const botPlayerIndex = currentRoom.players.findIndex(p => isBot(p)) as 0 | 1;
+                            const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
+                            
+                            if (!botMove || Object.keys(botMove).length === 0) break;
+
+                            const botProcessResult = gameLogic.processMove(
+                                currentRoom.gameState,
+                                botMove,
+                                // @ts-ignore
+                                nextPlayer.user._id.toString(),
+                                currentRoom.players
+                            );
+
+                            if (botProcessResult.error) break;
+
+                            currentRoom.gameState = botProcessResult.newState;
+                            
+                            gameResult = gameLogic.checkGameEnd(currentRoom.gameState, currentRoom.players);
+                            if (gameResult.isGameOver) {
+                                return endGame(io, currentRoom, gameResult.winnerId, gameResult.isDraw);
+                            }
+                            
+                            // Если ход не должен переключаться (серийное взятие у бота), цикл продолжится
+                            botCanMove = !botProcessResult.turnShouldSwitch;
+                        }
+
+                        // Когда серия ходов бота закончена, передаем ход человеку
+                        const humanPlayer = currentRoom.players.find(p => !isBot(p))!;
+                        // @ts-ignore
+                        currentRoom.gameState.turn = humanPlayer.user._id.toString();
+
                         io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
-                    }
+                    })();
                 }, 1500);
             }
         });
+
+        // socket.on('playerMove', ({ roomId, move }: { roomId: string, move: GameMove }) => {
+        //     const room = rooms[roomId];
+        //     if (!room || room.players.length < 2) return;
+            
+        //     // ИСПРАВЛЕНИЕ: Получаем флаг о необходимости смены хода
+        //     // @ts-ignore
+        //     const { newState, error, turnShouldSwitch } = gameLogics.processMove(room.gameState, move, currentPlayerId, room.players);
+        //     if (error) return socket.emit('error', { message: error });
+
+        //     // @ts-ignore
+        //     let nextPlayer = room.players.find(p => p.user._id.toString() !== currentPlayerId)!;
+            
+        //     // ИСПРАВЛЕНИЕ: Меняем ход только если игра это разрешает
+        //     if (turnShouldSwitch) {
+        //         // @ts-ignore
+        //         newState.turn = nextPlayer.user._id.toString();
+        //     } else {
+        //         // @ts-ignore
+        //         newState.turn = currentPlayerId; // Ход остается у текущего игрока
+        //         // @ts-ignore
+        //         nextPlayer = room.players.find(p => p.user._id.toString() === currentPlayerId)!; // "Следующий" игрок - он сам
+        //     }
+        //     room.gameState = newState;
+        //     // @ts-ignore
+        //     const gameResult = gameLogics.checkGameEnd(room.gameState, room.players, newState.turn);
+        //     if (gameResult.isGameOver) return endGame(io, room, gameResult.winnerId, gameResult.isDraw);
+            
+        //     io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+
+        //     if (isBot(nextPlayer)) {
+        //         setTimeout(() => {
+        //             const currentRoom = rooms[roomId];
+        //             if (!currentRoom) return;
+        //             // @ts-ignore
+        //             const botMove = gameLogics.makeBotMove(currentRoom.gameState);
+        //             // @ts-ignore
+        //             const { newState: botState, error: botError } = gameLogic.processMove(currentRoom.gameState, botMove, nextPlayer.user._id.toString(), currentRoom.players);
+        //             if (botError) return;
+
+        //             const humanPlayer = currentRoom.players.find(p => !isBot(p))!;
+        //             // @ts-ignore
+        //             botState.turn = humanPlayer.user._id.toString();
+        //             currentRoom.gameState = botState;
+        //             // @ts-ignore
+        //             const botGameResult = gameLogics.checkGameEnd(currentRoom.gameState, currentRoom.players);
+        //             if (botGameResult.isGameOver) {
+        //                 endGame(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
+        //             } else {
+        //                 io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+        //             }
+        //         }, 1500);
+        //     }
+        // });
 
         socket.on('leaveGame', (roomId: string) => {
             const room = rooms[roomId];

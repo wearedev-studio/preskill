@@ -4,6 +4,8 @@ import { useSocket } from '../../context/SocketContext';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import TicTacToeBoard from '../../components/game/TicTacToeBoard';
+import CheckersBoard from '../../components/game/CheckersBoard'; // 1. Импортируем доску для шашек
+
 
 interface Player {
     user: { _id: string; username: string; }
@@ -103,9 +105,26 @@ const GamePage: React.FC = () => {
 
     const renderGameBoard = () => {
         if (!roomState) return null;
+
+        const myPlayerIndex = roomState.players.findIndex((p: Player) => p.user._id === user?._id);
+
         switch (gameType) {
             case 'tic-tac-toe':
                 return <TicTacToeBoard board={roomState.gameState.board} onMove={(cellIndex) => handleMove({ cellIndex })} isMyTurn={roomState.gameState.turn === user?._id} isGameFinished={!!gameMessage} />;
+            case 'checkers':
+                // 3. Добавляем рендеринг доски для шашек
+                if (myPlayerIndex === -1) return <div>Ошибка: вы не являетесь игроком в этой комнате.</div>;
+                return (
+                    <CheckersBoard
+                        // @ts-ignore
+                        gameState={roomState.gameState}
+                        // @ts-ignore
+                        onMove={(move) => handleMove(move)}
+                        isMyTurn={roomState.gameState.turn === user?._id}
+                        isGameFinished={!!gameMessage}
+                        myPlayerIndex={myPlayerIndex as 0 | 1}
+                    />
+                );
             default:
                 return <div>Игра "{gameType}" не найдена.</div>;
         }
