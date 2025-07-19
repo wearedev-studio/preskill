@@ -5,6 +5,9 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import TicTacToeBoard from '../../components/game/TicTacToeBoard';
 import CheckersBoard from '../../components/game/CheckersBoard'; // 1. Импортируем доску для шашек
+import ChessBoard from '../../components/game/ChessBoard';
+import BackgammonBoard from '../../components/game/BackgammonBoard';
+import { Chess } from 'chess.js';
 
 
 interface Player {
@@ -103,10 +106,22 @@ const GamePage: React.FC = () => {
         if (socket) socket.emit('playerMove', { roomId, move: moveData });
     };
 
+     // 2. Новая функция для броска костей
+    const handleRollDice = () => {
+        if (socket) {
+            socket.emit('rollDice', roomId);
+        }
+    };
+
     const renderGameBoard = () => {
         if (!roomState) return null;
 
         const myPlayerIndex = roomState.players.findIndex((p: Player) => p.user._id === user?._id);
+        // if (myPlayerIndex === -1) return <div>Ошибка: вы не являетесь игроком.</div>;
+
+        // ИСПРАВЛЕНИЕ: Определяем, чей ход, по-разному для разных игр
+        const isMyTurn = roomState.gameState.turn === user?._id;
+
 
         switch (gameType) {
             case 'tic-tac-toe':
@@ -121,6 +136,23 @@ const GamePage: React.FC = () => {
                         // @ts-ignore
                         onMove={(move) => handleMove(move)}
                         isMyTurn={roomState.gameState.turn === user?._id}
+                        isGameFinished={!!gameMessage}
+                        myPlayerIndex={myPlayerIndex as 0 | 1}
+                    />
+                );
+            case 'chess':
+                // 2. Добавляем рендеринг доски для шахмат
+                // @ts-ignore
+                return <ChessBoard gameState={roomState.gameState} onMove={(move) => handleMove(move)} isMyTurn={isMyTurn} isGameFinished={!!gameMessage} myPlayerIndex={myPlayerIndex as 0 | 1} />;
+            case 'backgammon':
+                // 3. Добавляем рендеринг доски для нард
+                return (
+                    <BackgammonBoard
+                    // @ts-ignore
+                        gameState={roomState.gameState}
+                        onMove={(move) => handleMove(move)}
+                        onRollDice={handleRollDice} // Передаем новую функцию
+                        isMyTurn={isMyTurn}
                         isGameFinished={!!gameMessage}
                         myPlayerIndex={myPlayerIndex as 0 | 1}
                     />

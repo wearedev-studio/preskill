@@ -47,6 +47,9 @@ const Navbar: React.FC = () => {
             <span style={{ color: 'lightgreen' }}>Баланс: ${user.balance.toFixed(2)}</span>
             <span>({user.username})</span>
             <button onClick={handleLogout}>Выйти</button>
+            {user?.role === 'ADMIN' && (
+              <Link to="/admin" style={{...linkStyle, marginLeft: '1rem' }}>Админка</Link>
+            )}
           </>
         ) : (
           <>

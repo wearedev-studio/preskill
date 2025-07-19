@@ -8,6 +8,7 @@ export interface IUser extends Document {
   password?: string;
   avatar: string;
   balance: number;
+  role: 'USER' | 'ADMIN';
   passwordResetCode?: string; // Код для сброса пароля
   passwordResetExpires?: Date; // Время истечения кода
   comparePassword(enteredPassword: string): Promise<boolean>;
@@ -20,6 +21,11 @@ const userSchema = new Schema<IUser>({
   password: { type: String, required: true, minlength: 6, select: false },
   avatar: { type: String, default: 'default_avatar.png' },
   balance: { type: Number, default: 0 },
+  role: {
+    type: String,
+    enum: ['USER', 'ADMIN'],
+    default: 'USER',
+  },
 
   // Добавляем новые поля в схему
   passwordResetCode: {

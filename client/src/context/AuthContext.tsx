@@ -8,6 +8,7 @@ interface User {
   email: string;
   balance: number;
   avatar: string;
+  role: string;
 }
 
 interface AuthState {

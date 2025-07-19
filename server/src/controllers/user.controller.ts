@@ -18,6 +18,7 @@ export const getUserProfile = (req: Request, res: Response) => {
       email: req.user.email,
       balance: req.user.balance,
       avatar: req.user.avatar,
+      role: req.user.role
     });
   } else {
     // Эта ситуация маловероятна, если `protect` отработал корректно

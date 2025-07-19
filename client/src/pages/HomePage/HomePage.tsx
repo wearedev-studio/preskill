@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 const games = [
     { name: 'Крестики-нолики', gameType: 'tic-tac-toe', status: 'Доступно' },
     { name: 'Шашки', gameType: 'checkers', status: 'Доступно' }, // ИЗМЕНЕНО
-    { name: 'Шахматы', gameType: 'chess', status: 'В разработке' },
-    { name: 'Нарды', gameType: 'backgammon', status: 'В разработке' },
+    { name: 'Шахматы', gameType: 'chess', status: 'Доступно' },
+    { name: 'Нарды', gameType: 'backgammon', status: 'Доступно' },
 ];
 
 const GameCard: React.FC<{ game: typeof games[0] }> = ({ game }) => (

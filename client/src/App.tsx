@@ -13,9 +13,12 @@ import ProfilePage from './pages/ProfilePage/ProfilePage';
 import LobbyPage from './pages/LobbyPage/LobbyPage'; // Переименовали TicTacToeLobbyPage
 import GamePage from './pages/GamePage/GamePage';   // Переименовали TicTacToeGamePage
 
+import AdminPage from './pages/AdminPage/AdminPage';
+
 // Components
 import Navbar from './components/Navbar/Navbar';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
+import AdminRoute from './components/AdminRoute/AdminRoute';
 
 function App() {
   const { token, loading, refreshUser } = useAuth();
@@ -48,6 +51,9 @@ function App() {
               {/* Динамические роуты для лобби и игры */}
               <Route path="/lobby/:gameType" element={<LobbyPage />} />
               <Route path="/game/:gameType/:roomId" element={<GamePage />} />
+            </Route>
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminPage />} />
             </Route>
           </Routes>
         </main>

@@ -2,7 +2,8 @@ import app from './app';
 import connectDB from './config/db';
 import http from 'http';
 import { Server } from 'socket.io'; // Импортируем Server из socket.io
-import initializeSocket from './socket'; // Импортируем нашу будущую логику сокетов
+import { initializeSocket, rooms, gameLogics } from './socket'; // Экспортируем rooms и gameLogics
+import { setSocketData } from './controllers/admin.controller'
 
 // Подключение к базе данных
 connectDB();
@@ -22,5 +23,11 @@ const io = new Server(server, {
 
 // Инициализируем всю логику обработки сокет-соединений
 initializeSocket(io);
+
+// Передаем ссылки на rooms и gameLogics в админ-контроллер
+setSocketData(rooms, gameLogics);
+
+// Передаем экземпляр io в Express приложение
+app.set('io', io);
 
 server.listen(PORT, () => console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`));

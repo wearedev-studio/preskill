@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 // Import Routes
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
+import adminRoutes from './routes/admin.routes';
 
 dotenv.config();
 
@@ -23,5 +24,6 @@ app.get('/', (req: Request, res: Response) => {
 // Connecting Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 export default app;
