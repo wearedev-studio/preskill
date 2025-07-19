@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import adminRoutes from './routes/admin.routes';
+import tournamentRoutes from './routes/tournament.routes'; // 1. Импорт
+import notificationRoutes from './routes/notification.routes';
 
 dotenv.config();
 
@@ -25,5 +27,7 @@ app.get('/', (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/tournaments', tournamentRoutes); // 2. Подключение
+app.use('/api/notifications', notificationRoutes);
 
 export default app;

@@ -36,6 +36,14 @@ const GamePage: React.FC = () => {
     useEffect(() => {
         if (!socket || !roomId) return;
 
+        // Если это турнирная игра, сообщаем серверу, что мы присоединились
+        if (roomId.startsWith('tourney-')) {
+            socket.emit('joinTournamentGame', roomId);
+        } else {
+            // Для обычных игр, если нужно, можно оставить старую логику
+            socket.emit('getGameState', roomId);
+        }
+
         const onGameStart = (state: GameRoomState) => {
             setGameMessage('');
             setRoomState(state);

@@ -2,7 +2,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface ITransaction extends Document {
     user: Types.ObjectId;
-    type: 'DEPOSIT' | 'WITHDRAWAL' | 'WAGER_LOSS' | 'WAGER_WIN';
+  type: 'DEPOSIT' | 'WITHDRAWAL' | 'WAGER_LOSS' | 'WAGER_WIN' | 'TOURNAMENT_FEE' | 'TOURNAMENT_WINNINGS';
     status: 'COMPLETED' | 'PENDING' | 'CANCELLED';
     amount: number;
 }
@@ -17,7 +17,14 @@ const transactionSchema = new Schema<ITransaction>({
     type: {
         type: String,
         required: true,
-        enum: ['DEPOSIT', 'WITHDRAWAL', 'WAGER_LOSS', 'WAGER_WIN'],
+        enum: [
+        'DEPOSIT', 
+        'WITHDRAWAL', 
+        'WAGER_LOSS', 
+        'WAGER_WIN', 
+        'TOURNAMENT_FEE', // Взнос за участие
+        'TOURNAMENT_WINNINGS' // Выигрыш в турнире
+    ],
     },
     status: {
         type: String,

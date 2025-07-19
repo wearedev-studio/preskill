@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
+
 
 interface User {
   _id: string;
@@ -12,6 +14,7 @@ interface User {
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, user, logout, refreshUser } = useAuth();
+  const { unreadCount } = useNotifications();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -46,6 +49,28 @@ const Navbar: React.FC = () => {
             <Link to="/profile" style={linkStyle}>Профиль</Link>
             <span style={{ color: 'lightgreen' }}>Баланс: ${user.balance.toFixed(2)}</span>
             <span>({user.username})</span>
+            <Link to="/tournaments" style={{...linkStyle, marginLeft: '1rem' }}>Турниры</Link>
+            <Link to="/notifications" style={{ position: 'relative', textDecoration: 'none', color: 'white', fontSize: '1.5rem' }}>
+                🔔
+                {unreadCount > 0 && (
+                    <span style={{
+                        position: 'absolute',
+                        top: '-5px',
+                        right: '-10px',
+                        background: 'red',
+                        borderRadius: '50%',
+                        width: '20px',
+                        height: '20px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                    }}>
+                        {unreadCount}
+                    </span>
+                )}
+            </Link>
             <button onClick={handleLogout}>Выйти</button>
             {user?.role === 'ADMIN' && (
               <Link to="/admin" style={{...linkStyle, marginLeft: '1rem' }}>Админка</Link>

@@ -8,6 +8,10 @@ import { ticTacToeLogic } from './games/tic-tac-toe.logic';
 import { checkersLogic } from './games/checkers.logic'; // 1. ИМПОРТИРУЕМ новую логику
 import { chessLogic } from './games/chess.logic';
 import { backgammonLogic } from './games/backgammon.logic';
+import { advanceTournamentWinner } from './services/tournament.service';
+// import { advanceTournamentWinner } from './services/tournament.service';
+
+
 
 
 // ==================================
@@ -42,7 +46,7 @@ export const gameLogics: Record<Room['gameType'], IGameLogic> = {
 };
 
 const BOT_WAIT_TIME = 15000;
-const botUsernames = ["Shadow", "Vortex", "Raptor", "Ghost", "Cipher", "Blaze"];
+export const botUsernames = ["Shadow", "Vortex", "Raptor", "Ghost", "Cipher", "Blaze"];
 
 // ==================================
 // Вспомогательные функции
@@ -84,6 +88,20 @@ function formatGameNameForDB(gameType: string): 'Checkers' | 'Chess' | 'Backgamm
 
 /** Централизованная функция для завершения игры */
 async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolean = false) {
+    if (room.id.startsWith('tourney-')) {
+        const [, tournamentId, , matchIdStr] = room.id.split('-');
+        const matchId = parseInt(matchIdStr, 10);
+        // @ts-ignore
+        const winnerObject = room.players.find(p => p.user._id.toString() === winnerId)?.user;
+        
+        if (winnerObject) {
+            // Передаем в сервис ID всего турнира, ID матча и данные победителя
+            advanceTournamentWinner(io, tournamentId, matchId, winnerObject);
+        }
+        delete rooms[room.id];
+        return; 
+    }
+
     if (!room) return;
     if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
     if (room.botJoinTimer) clearTimeout(room.botJoinTimer);
@@ -184,6 +202,20 @@ export const initializeSocket = (io: Server) => {
 
         socket.on('leaveLobby', (gameType: Room['gameType']) => {
             socket.leave(`lobby-${gameType}`);
+        });
+
+        socket.on('joinTournamentGame', (roomId: string) => {
+            const room = rooms[roomId];
+            if (room && room.players.some(p => p.socketId === socket.id)) {
+                socket.join(roomId);
+                
+                const connectedSockets = io.sockets.adapter.rooms.get(roomId);
+                // Если оба игрока подключились к комнате
+                if (connectedSockets && connectedSockets.size === room.players.length) {
+                    console.log(`[Tournament] Match starting in room ${roomId}`);
+                    io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+                }
+            }
         });
 
         // --- НОВЫЙ ОБРАБОТЧИК ДЛЯ БРОСКА КОСТЕЙ ---
