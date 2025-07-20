@@ -6,10 +6,6 @@
    BASE STYLES
    ========================================================================== */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* Основные цвета проекта */
 :root {
   --primary-bg: #0f172a;        /* slate-900 */

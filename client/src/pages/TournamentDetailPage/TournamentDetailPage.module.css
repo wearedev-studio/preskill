@@ -1,0 +1,178 @@
+.pageContainer {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.card {
+    background-color: #1e293b; /* slate-800 */
+    border: 1px solid #334155; /* slate-700 */
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.headerInfo {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.headerIcon {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    background: linear-gradient(to right, #f59e0b, #fbbf24);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.headerIcon svg {
+    width: 2rem;
+    height: 2rem;
+    color: white;
+}
+.headerText h1 {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: white;
+}
+.headerText p {
+    color: #94a3b8;
+}
+
+.prizePool {
+    text-align: right;
+}
+.prizePoolValue {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #4ade80; /* green-400 */
+}
+.prizePoolLabel {
+    font-size: 0.875rem;
+    color: #94a3b8;
+}
+
+.detailsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.detailItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #cbd5e1;
+}
+.detailItem svg {
+    width: 20px;
+    height: 20px;
+    color: #94a3b8;
+}
+
+.statusBadge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+.statusRegistering { background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.statusActive { background-color: rgba(34, 197, 94, 0.2); color: #86efac; }
+.statusFinished { background-color: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+
+.registrationStatus {
+    background-color: rgba(34, 197, 94, 0.1);
+    border: 1px solid #166534;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #bbf7d0;
+    font-weight: 500;
+}
+.registrationStatus svg { color: #4ade80; }
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.actionButton {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s;
+}
+.btnBlue { background-color: #2563eb; color: white; }
+.btnBlue:hover { background-color: #1d4ed8; }
+.btnGreen { background-color: #16a34a; color: white; }
+.btnGreen:hover { background-color: #15803d; }
+.btnOrange { background-color: #ea580c; color: white; }
+.btnOrange:hover { background-color: #c2410c; }
+
+.bracketContainer {
+    overflow-x: auto;
+    padding-bottom: 1rem;
+}
+.bracket {
+    display: flex;
+    gap: 2rem;
+    min-width: max-content;
+}
+.round {
+    min-width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.roundTitle {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: white;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.match {
+    background-color: #334155; /* slate-700 */
+    border: 1px solid #475569; /* slate-600 */
+    border-radius: 8px;
+    padding: 1rem;
+}
+.playerSlot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-radius: 4px;
+    background-color: #475569;
+    color: white;
+    font-weight: 500;
+}
+.playerSlot.winner {
+    background-color: rgba(34, 197, 94, 0.3);
+}
+.vsText {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0.5rem 0;
+}

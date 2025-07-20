@@ -4,15 +4,16 @@ import { useSocket } from '../../context/SocketContext';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import TicTacToeBoard from '../../components/game/TicTacToeBoard';
-import CheckersBoard from '../../components/game/CheckersBoard'; // 1. Импортируем доску для шашек
+import CheckersBoard from '../../components/game/CheckersBoard';
 import ChessBoard from '../../components/game/ChessBoard';
 import BackgammonBoard from '../../components/game/BackgammonBoard';
 import { Chess } from 'chess.js';
-
+import styles from './GamePage.module.css';
 
 interface Player {
     user: { _id: string; username: string; }
 }
+
 interface GameRoomState {
     id: string;
     gameType: string;
@@ -21,11 +22,25 @@ interface GameRoomState {
     bet: number;
 }
 
+const formatGameName = (gameType: string = ''): string => {
+    return gameType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
+const getGameIcon = (gameType: string = ''): string => {
+    switch (gameType) {
+        case 'tic-tac-toe': return '⭕';
+        case 'checkers': return '⚫';
+        case 'chess': return '♛';
+        case 'backgammon': return '🎲';
+        default: return '🎮';
+    }
+}
+
 const GamePage: React.FC = () => {
     const { gameType, roomId } = useParams<{ gameType: string; roomId: string }>();
     const navigate = useNavigate();
     const { socket } = useSocket();
-    const { user, refreshUser   } = useAuth();
+    const { user, refreshUser } = useAuth();
     
     const [roomState, setRoomState] = useState<GameRoomState | null>(null);
     const [gameMessage, setGameMessage] = useState('');
@@ -36,11 +51,9 @@ const GamePage: React.FC = () => {
     useEffect(() => {
         if (!socket || !roomId) return;
 
-        // Если это турнирная игра, сообщаем серверу, что мы присоединились
         if (roomId.startsWith('tourney-')) {
             socket.emit('joinTournamentGame', roomId);
         } else {
-            // Для обычных игр, если нужно, можно оставить старую логику
             socket.emit('getGameState', roomId);
         }
 
@@ -55,15 +68,15 @@ const GamePage: React.FC = () => {
             else if (winner?.user.username === user?.username) setGameMessage('🎉 Вы победили!');
             else setGameMessage(`Вы проиграли. Победитель: ${winner?.user.username}`);
 
-            // Просто запрашиваем свежие данные и устанавливаем их
             try {
-                // const { data: freshUser } = await axios.get('http://localhost:5001/api/users/profile');
                 await refreshUser();
             } catch (error) {
                 console.error("Не удалось обновить профиль после игры", error);
             }
         };
-        const onError = ({ message }: { message: string }) => alert(`Ошибка: ${message}`);
+        const onError = ({ message }: { message: string }) => {
+            setGameMessage(`Ошибка: ${message}`);
+        };
         
         socket.on('gameStart', onGameStart);
         socket.on('gameUpdate', onGameUpdate);
@@ -78,7 +91,7 @@ const GamePage: React.FC = () => {
             socket.off('gameEnd', onGameEnd);
             socket.off('error', onError);
         };
-    }, [socket, roomId, user?.username, navigate, gameType, refreshUser ]);
+    }, [socket, roomId, user?.username, navigate, gameType, refreshUser]);
 
     useEffect(() => {
         if (roomState?.players.length !== 1 || countdown <= 0 || gameMessage) return;
@@ -114,7 +127,6 @@ const GamePage: React.FC = () => {
         if (socket) socket.emit('playerMove', { roomId, move: moveData });
     };
 
-     // 2. Новая функция для броска костей
     const handleRollDice = () => {
         if (socket) {
             socket.emit('rollDice', roomId);
@@ -125,18 +137,24 @@ const GamePage: React.FC = () => {
         if (!roomState) return null;
 
         const myPlayerIndex = roomState.players.findIndex((p: Player) => p.user._id === user?._id);
-        // if (myPlayerIndex === -1) return <div>Ошибка: вы не являетесь игроком.</div>;
-
-        // ИСПРАВЛЕНИЕ: Определяем, чей ход, по-разному для разных игр
         const isMyTurn = roomState.gameState.turn === user?._id;
-
 
         switch (gameType) {
             case 'tic-tac-toe':
-                return <TicTacToeBoard board={roomState.gameState.board} onMove={(cellIndex) => handleMove({ cellIndex })} isMyTurn={roomState.gameState.turn === user?._id} isGameFinished={!!gameMessage} />;
+                return (
+                    <TicTacToeBoard 
+                        board={roomState.gameState.board} 
+                        onMove={(cellIndex) => handleMove({ cellIndex })} 
+                        isMyTurn={roomState.gameState.turn === user?._id} 
+                        isGameFinished={!!gameMessage} 
+                    />
+                );
             case 'checkers':
-                // 3. Добавляем рендеринг доски для шашек
-                if (myPlayerIndex === -1) return <div>Ошибка: вы не являетесь игроком в этой комнате.</div>;
+                if (myPlayerIndex === -1) return (
+                    <div className="alert alert-error">
+                        <p>Ошибка: вы не являетесь игроком в этой комнате.</p>
+                    </div>
+                );
                 return (
                     <CheckersBoard
                         // @ts-ignore
@@ -149,56 +167,118 @@ const GamePage: React.FC = () => {
                     />
                 );
             case 'chess':
-                // 2. Добавляем рендеринг доски для шахмат
-                // @ts-ignore
-                return <ChessBoard gameState={roomState.gameState} onMove={(move) => handleMove(move)} isMyTurn={isMyTurn} isGameFinished={!!gameMessage} myPlayerIndex={myPlayerIndex as 0 | 1} />;
+                return (
+                    <ChessBoard 
+                        // @ts-ignore
+                        gameState={roomState.gameState} 
+                        onMove={(move) => handleMove(move)} 
+                        isMyTurn={isMyTurn} 
+                        isGameFinished={!!gameMessage} 
+                        myPlayerIndex={myPlayerIndex as 0 | 1} 
+                    />
+                );
             case 'backgammon':
-                // 3. Добавляем рендеринг доски для нард
                 return (
                     <BackgammonBoard
-                    // @ts-ignore
+                        // @ts-ignore
                         gameState={roomState.gameState}
                         onMove={(move) => handleMove(move)}
-                        onRollDice={handleRollDice} // Передаем новую функцию
+                        onRollDice={handleRollDice}
                         isMyTurn={isMyTurn}
                         isGameFinished={!!gameMessage}
                         myPlayerIndex={myPlayerIndex as 0 | 1}
                     />
                 );
             default:
-                return <div>Игра "{gameType}" не найдена.</div>;
+                return (
+                    <div className="alert alert-error">
+                        <p>Игра "{gameType}" не найдена.</p>
+                    </div>
+                );
         }
     };
 
-    if (!roomState) return <div>Загрузка игры...</div>;
+    if (!roomState) {
+        return (
+            <div className="loading-container">
+                <div className="loading-content">
+                    <div className="spinner"></div>
+                    <p className="loading-text">Загрузка игры...</p>
+                </div>
+            </div>
+        );
+    }
     
     const isWaitingForOpponent = roomState.players.length < 2 && !gameMessage;
     const opponent = roomState.players.find(p => p.user._id !== user?._id);
     const isMyTurn = roomState.gameState.turn === user?._id;
 
     return (
-        <div style={{ textAlign: 'center' }}>
-            <h2>{gameType?.replace(/-/g, ' ')}</h2>
-            <p>Вы (<strong>{user?.username}</strong>) против <strong>{opponent?.user.username || '...'}</strong> | Ставка: <strong>${roomState.bet}</strong></p>
-            
-            {isWaitingForOpponent ? (
-                <h3>⏳ Ожидание оппонента... ({countdown} сек)</h3>
-            ) : !gameMessage ? (
-                <h3>{isMyTurn ? '✅ Ваш ход' : '⏳ Ход противника'}</h3>
-            ) : (
-                <div style={{ margin: '20px 0' }}>
-                    <h3 style={{ color: 'lightgreen', fontSize: '1.5rem' }}>{gameMessage}</h3>
-                    <p>Возвращение в лобби через: {redirectCountdown}...</p>
-                    <button onClick={() => navigate(`/lobby/${gameType}`)}>Вернуться сейчас</button>
-                </div>
-            )}
-            
-            {renderGameBoard()}
-            
-            {!gameMessage && (
-                <button onClick={handleLeaveGame} style={{ marginTop: '20px', backgroundColor: '#FF6347', color: 'white' }}>
-                    {isWaitingForOpponent ? 'Отменить поиск' : 'Сдаться'}
+        <div className={styles.pageContainer}>
+            <div className={styles.header}>
+                <button onClick={() => navigate(`/lobby/${gameType}`)} className={styles.backButton}>
+                    ← Назад в лобби
                 </button>
+                <div className={styles.gameHeader}>
+                    <div className={styles.gameIcon}>{getGameIcon(gameType)}</div>
+                    <div><h1>{formatGameName(gameType)}</h1></div>
+                </div>
+            </div>
+
+            <div className={`${styles.card} ${styles.cardPadding}`}>
+                <div className={styles.gameInfoGrid}>
+                    <div className={styles.gameInfoItem}>
+                        <span className={styles.gameInfoIcon}>👥</span>
+                        <div className={styles.gameInfoContent}><p>Игроки</p><p>{user?.username} vs {opponent?.user.username || '...'}</p></div>
+                    </div>
+                    <div className={styles.gameInfoItem}>
+                        <span className={styles.gameInfoIcon}>💰</span>
+                        <div className={styles.gameInfoContent}><p>Ставка</p><p>${roomState.bet}</p></div>
+                    </div>
+                    <div className={styles.gameInfoItem}>
+                        <span className={styles.gameInfoIcon}>🏆</span>
+                        <div className={styles.gameInfoContent}><p>Приз</p><p>${roomState.bet * 2}</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <div className={styles.statusMessageContainer}>
+                {isWaitingForOpponent ? (
+                    <div className={`${styles.statusMessage} ${styles.statusWaiting}`}>
+                        <div className={styles.statusIcon}>⏰</div>
+                        <h3 className={styles.statusTitleWaiting}>⏳ Ожидание оппонента...</h3>
+                        <p>Автоматическая отмена через: <span style={{fontWeight: 'bold'}}>{countdown} сек</span></p>
+                    </div>
+                ) : !gameMessage ? (
+                    <div className={`${styles.statusMessage} ${isMyTurn ? styles.statusTurn : styles.statusOpponentTurn}`}>
+                        <h3 className={`${styles.statusTitle} ${isMyTurn ? styles.statusTitleMyTurn : styles.statusTitleOpponentTurn}`}>
+                            {isMyTurn ? '✅ Ваш ход' : '⏳ Ход противника'}
+                        </h3>
+                    </div>
+                ) : (
+                    <div className={`${styles.statusMessage} ${styles.statusGameEnd}`}>
+                        <div className={styles.statusIcon}>
+                            {gameMessage.includes('победили') ? '🏆' : gameMessage.includes('Ничья') ? '🤝' : '😔'}
+                        </div>
+                        <h3 className={`${styles.statusTitle} ${styles.statusTitleEnd}`}>{gameMessage}</h3>
+                        <div className={styles.statusCountdown}>
+                            <p>Возвращение в лобби через: <span style={{fontWeight: 'bold'}}>{redirectCountdown} сек</span></p>
+                            <button onClick={() => navigate(`/lobby/${gameType}`)} className={`${styles.btn} ${styles.btnPrimary}`}>Вернуться сейчас</button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className={`${styles.card} ${styles.cardPadding}`}>
+                {renderGameBoard()}
+            </div>
+
+            {!gameMessage && (
+                <div style={{textAlign: 'center'}}>
+                    <button onClick={handleLeaveGame} className={`${styles.btn} ${styles.btnDanger}`}>
+                        {isWaitingForOpponent ? 'Отменить поиск' : 'Сдаться'}
+                    </button>
+                </div>
             )}
         </div>
     );

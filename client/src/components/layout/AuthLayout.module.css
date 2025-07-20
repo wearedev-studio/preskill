@@ -1,0 +1,25 @@
+.container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background-size: cover;
+    background-position: center;
+    /* Убедись, что у тебя есть файл /auth-bg.jpg в папке /public */
+    background-image: url('/auth-bg.jpg'); 
+}
+
+.cardWrapper {
+    width: 100%;
+    max-width: 28rem; /* 448px */
+}
+
+.card {
+    background-color: rgba(15, 23, 42, 0.7); /* slate-900 с прозрачностью */
+    backdrop-filter: blur(16px);
+    border-radius: 1rem; /* rounded-2xl */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border: 1px solid #334155; /* border-slate-700 */
+    padding: 2rem; /* p-8 */
+}

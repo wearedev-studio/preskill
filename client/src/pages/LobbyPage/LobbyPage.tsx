@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
+import styles from './LobbyPage.module.css'; // Импортируем стили
 
 interface RoomInfo {
     id: string;
@@ -18,6 +19,16 @@ const formatGameName = (gameType: string = ''): string => {
     return gameType.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
+const getGameIcon = (gameType: string = ''): string => {
+    switch (gameType) {
+        case 'tic-tac-toe': return '⭕';
+        case 'checkers': return '⚫';
+        case 'chess': return '♛';
+        case 'backgammon': return '🎲';
+        default: return '🎮';
+    }
+}
+
 const LobbyPage: React.FC = () => {
     const { gameType } = useParams<{ gameType: string }>();
     const { socket } = useSocket();
@@ -27,25 +38,23 @@ const LobbyPage: React.FC = () => {
     const [rooms, setRooms] = useState<RoomInfo[]>([]);
     const [bet, setBet] = useState(10);
     const [error, setError] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
 
     useEffect(() => {
         if (!socket || !gameType) return;
-
-        // 1. Сообщаем серверу, что мы вошли в лобби этого типа игры
         socket.emit('joinLobby', gameType);
 
-        // 2. Слушаем готовый список комнат от сервера
-        const onRoomsList = (availableRooms: RoomInfo[]) => {
-            setRooms(availableRooms);
-        };
+        const onRoomsList = (availableRooms: RoomInfo[]) => setRooms(availableRooms);
         const onGameStart = (room: GameRoom) => navigate(`/game/${room.gameType}/${room.id}`);
-        const onError = ({ message }: { message: string }) => setError(message);
+        const onError = ({ message }: { message: string }) => {
+            setError(message);
+            setIsCreating(false);
+        };
         
         socket.on('roomsList', onRoomsList);
         socket.on('gameStart', onGameStart);
         socket.on('error', onError);
 
-        // 3. При выходе со страницы сообщаем серверу, что мы покинули лобби
         return () => {
             socket.emit('leaveLobby', gameType);
             socket.off('roomsList', onRoomsList);
@@ -57,6 +66,7 @@ const LobbyPage: React.FC = () => {
     const handleCreateRoom = () => {
         if (socket && gameType) {
             setError('');
+            setIsCreating(true);
             socket.emit('createRoom', { gameType, bet });
         }
     };
@@ -68,38 +78,90 @@ const LobbyPage: React.FC = () => {
         }
     };
 
-    if (!user || !gameType) return <div>Загрузка...</div>;
+    if (!user || !gameType) {
+        return <div>Загрузка...</div>;
+    }
 
     return (
-        <div>
-            <h2>Лобби: {formatGameName(gameType)}</h2>
-            <p>Ваш баланс: ${user.balance.toFixed(2)}</p>
-            {error && <p style={{ color: 'salmon' }}>Ошибка: {error}</p>}
-
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: '2rem', marginTop: '2rem' }}>
-                <div style={{ border: '1px solid #444', padding: '1.5rem', borderRadius: '8px' }}>
-                    <h3>Создать свою игру</h3>
-                    <input 
-                        type="number" 
-                        value={bet} 
-                        onChange={(e) => setBet(Math.max(1, Number(e.target.value)))}
-                        min="1"
-                    />
-                    <button onClick={handleCreateRoom}>Создать игру на ${bet}</button>
+        <div className={styles.pageContainer}>
+            <button onClick={() => navigate('/games')} className={styles.backButton}>
+                ← Назад к играм
+            </button>
+            
+            <div className={styles.gameHeader}>
+                <div className={styles.gameIcon}>{getGameIcon(gameType)}</div>
+                <div>
+                    <h1>Лобби: {formatGameName(gameType)}</h1>
+                    <p>Ваш баланс: <span>${user.balance.toFixed(2)}</span></p>
                 </div>
-                <div style={{ border: '1px solid #444', padding: '1.5rem', borderRadius: '8px', minWidth: '300px' }}>
-                    <h3>Доступные игры</h3>
-                    {rooms.length === 0 ? <p>Нет доступных комнат. Создайте свою!</p> : (
-                        rooms.map(room => (
-                            <div key={room.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #555', padding: '10px 0' }}>
-                                <div>
-                                    <p>Игрок: {room.host.user.username}</p>
-                                    <p>Ставка: ${room.bet}</p>
-                                </div>
-                                <button onClick={() => handleJoinRoom(room.id)}>Присоединиться</button>
+            </div>
+
+            {error && <div style={{color: 'salmon', textAlign: 'center', marginBottom: '1rem'}}>Ошибка: {error}</div>}
+
+            <div className={styles.mainGrid}>
+                {/* Секция создания комнаты */}
+                <div className={styles.lobbySection}>
+                    <div className={styles.lobbySectionHeader}>
+                        <span>➕</span>
+                        <h2 className={styles.lobbySectionTitle}>Создать игру</h2>
+                    </div>
+                    <div className={styles.formGroup}>
+                        <label className={styles.formLabel}>Ставка ($)</label>
+                        <input
+                            type="number"
+                            value={bet}
+                            onChange={(e) => setBet(Math.max(1, Number(e.target.value)))}
+                            min="1"
+                            max={user.balance}
+                            className={styles.formInput}
+                            placeholder="Введите ставку"
+                        />
+                    </div>
+                    <button onClick={handleCreateRoom} disabled={isCreating || bet > user.balance} className={`${styles.btn} ${styles.btnPrimary}`}>
+                        {isCreating ? (
+                            <>
+                                <div className={styles.spinner}></div>
+                                Создание...
+                            </>
+                        ) : (
+                            `▶️ Создать игру на $${bet}`
+                        )}
+                    </button>
+                </div>
+
+                {/* Секция доступных комнат */}
+                <div className={styles.lobbySection}>
+                    <div className={styles.lobbySectionHeader}>
+                        <span>👥</span>
+                        <h2 className={styles.lobbySectionTitle}>Доступные игры</h2>
+                    </div>
+                    
+                    <div className={styles.roomList}>
+                        {rooms.length === 0 ? (
+                            <div className={styles.emptyState}>
+                                <div>⏰</div>
+                                <p>Нет доступных комнат</p>
+                                <p>Создайте свою игру!</p>
                             </div>
-                        ))
-                    )}
+                        ) : (
+                            rooms.map(room => (
+                                <div key={room.id} className={styles.roomItem}>
+                                    <div className={styles.roomInfo}>
+                                        <div className={styles.roomAvatar}>
+                                            <span>👤</span>
+                                        </div>
+                                        <div className={styles.roomDetails}>
+                                            <h4>{room.host.user.username}</h4>
+                                            <p>Ставка: ${room.bet}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => handleJoinRoom(room.id)} className={`${styles.btn} ${styles.btnPrimary}`}>
+                                        Присоединиться
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -1,61 +1,92 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
-import { useAuth } from '../../context/AuthContext'; // Импортируем хук
+import { useAuth } from '../../context/AuthContext';
+import styles from './LoginPage.module.css';
+import { Crown } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
-    const { login } = useAuth(); // Используем функцию login из контекста
+    const { login } = useAuth();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-
+        setIsLoading(true);
         try {
-            const res = await axios.post('http://localhost:5001/api/auth/login', {
-                email,
-                password,
-            });
-            // В res.data у нас есть token и все данные пользователя
+            const res = await axios.post('http://localhost:5001/api/auth/login', { email, password });
             const { token, ...user } = res.data;
-            login({ token, user }); // Обновляем глобальное состояние
+            login({ token, user });
             navigate('/');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Ошибка входа. Проверьте данные.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div>
-            <h2>Вход</h2>
-            <form onSubmit={handleSubmit}>
-                <div>
-                    <label>Email:</label>
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
+        <div className={styles.authContainer}>
+            <div className={styles.authCard}>
+                <div className={styles.authHeader}>
+                    <div className={styles.logo}>
+                        <div className={styles.logoIconContainer}><Crown /></div>
+                        <h1 className={styles.logoText}>Skill Games</h1>
+                    </div>
+                    <h2 className={styles.authTitle}>Вход в систему</h2>
+                    <p className={styles.authSubtitle}>Добро пожаловать обратно!</p>
                 </div>
-                <div>
-                    <label>Пароль:</label>
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                    />
+
+                <form onSubmit={handleSubmit} className={styles.authForm}>
+                    <div className={styles.formGroup}>
+                        <label htmlFor="email" className={styles.formLabel}>Email адрес</label>
+                        <input
+                            id="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            className={styles.formInput}
+                            placeholder="you@example.com"
+                        />
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label htmlFor="password" className={styles.formLabel}>Пароль</label>
+                        <input
+                            id="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className={styles.formInput}
+                            placeholder="••••••••"
+                        />
+                    </div>
+
+                    {error && <div className={styles.alertError}><p>{error}</p></div>}
+
+                    <button type="submit" disabled={isLoading} className={`${styles.btn} ${styles.btnPrimary}`}>
+                        {isLoading ? (
+                            <><div className={styles.spinner}></div><span>Вход...</span></>
+                        ) : ( "Войти" )}
+                    </button>
+                </form>
+
+                <div className={styles.authFooter}>
+                    <p>
+                        <Link to="/forgot-password" className={styles.authLink}>Забыли пароль?</Link>
+                    </p>
+                    <p style={{ marginTop: '0.5rem' }}>
+                        Нет аккаунта?{' '}
+                        <Link to="/register" className={styles.authLink}>Зарегистрироваться</Link>
+                    </p>
                 </div>
-                {error && <p style={{ color: 'red' }}>{error}</p>}
-                <button type="submit">Войти</button>
-            </form>
-            <p style={{ marginTop: '1rem' }}>
-                <Link to="/forgot-password">Забыли пароль?</Link>
-            </p>
+            </div>
         </div>
     );
 };
