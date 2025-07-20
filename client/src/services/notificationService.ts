@@ -1,6 +1,6 @@
 import axios from 'axios';
+import { API_URL } from '../api/index';
 
-// Интерфейс, описывающий одно уведомление
 export interface INotification {
     _id: string;
     user: string;
@@ -11,18 +11,12 @@ export interface INotification {
     createdAt: string;
 }
 
-/**
- * Получить все уведомления для текущего пользователя
- */
 export const getMyNotifications = async (): Promise<INotification[]> => {
-    const { data } = await axios.get('http://localhost:5001/api/notifications');
+    const { data } = await axios.get(`${API_URL}/api/notifications`);
     return data;
 };
 
-/**
- * Отметить все уведомления как прочитанные
- */
 export const markNotificationsAsRead = async (): Promise<{ message: string }> => {
-    const { data } = await axios.post('http://localhost:5001/api/notifications/read');
+    const { data } = await axios.post(`${API_URL}/api/notifications/read`);
     return data;
 };

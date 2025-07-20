@@ -1,3 +1,4 @@
+import { API_URL } from '@/api';
 import axios from 'axios';
 
 // Типы данных, которые мы ожидаем от API
@@ -19,7 +20,7 @@ export interface ITournament {
  * Получить список всех турниров
  */
 export const getTournaments = async (): Promise<ITournament[]> => {
-    const { data } = await axios.get('http://localhost:5001/api/tournaments');
+    const { data } = await axios.get(`${API_URL}/api/tournaments`);
     return data;
 };
 
@@ -27,7 +28,7 @@ export const getTournaments = async (): Promise<ITournament[]> => {
  * Получить детальную информацию о конкретном турнире по ID
  */
 export const getTournamentById = async (id: string): Promise<ITournament> => {
-    const { data } = await axios.get(`http://localhost:5001/api/tournaments/${id}`);
+    const { data } = await axios.get(`${API_URL}/api/tournaments/${id}`);
     return data;
 };
 
@@ -35,6 +36,6 @@ export const getTournamentById = async (id: string): Promise<ITournament> => {
  * Отправляет запрос на регистрацию в турнире
  */
 export const registerForTournament = async (id: string) => {
-    const { data } = await axios.post(`http://localhost:5001/api/tournaments/${id}/register`);
+    const { data } = await axios.post(`${API_URL}/api/tournaments/${id}/register`);
     return data;
 };

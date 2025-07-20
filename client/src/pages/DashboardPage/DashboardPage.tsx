@@ -5,6 +5,7 @@ import { getTournaments, ITournament } from '../../services/tournamentService';
 import axios from 'axios';
 import { Trophy, Target, DollarSign, Clock, Users } from 'lucide-react';
 import styles from './DashboardPage.module.css';
+import { API_URL } from '../../api/index';
 
 interface IGameHistory {
     _id: string;
@@ -25,7 +26,7 @@ const DashboardPage: React.FC = () => {
         const fetchData = async () => {
             try {
                 const [gamesHistoryRes, tournamentsRes] = await Promise.all([
-                    axios.get<any[]>('http://localhost:5001/api/users/history/games'),
+                    axios.get<any[]>(`${API_URL}/api/users/history/games`),
                     getTournaments()
                 ]);
 

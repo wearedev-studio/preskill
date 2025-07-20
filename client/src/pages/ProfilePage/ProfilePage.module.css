@@ -206,3 +206,36 @@
 
 .amountPositive { color: #4ade80; } /* green-400 */
 .amountNegative { color: #f87171; } /* red-400 */
+
+.avatarContainer {
+    position: relative;
+    width: 80px;
+    height: 80px;
+}
+.profileAvatarImg {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover; /* Чтобы картинка не искажалась */
+    border: 3px solid #334155;
+}
+.avatarEditButton {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 30px;
+    height: 30px;
+    background-color: #2563eb;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid #1e293b;
+}
+.avatarActions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+}

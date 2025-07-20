@@ -1,5 +1,6 @@
 import React, { createContext, useReducer, useContext, ReactNode, useCallback } from 'react';
 import axios from 'axios';
+import { API_URL } from '../api/index';
 
 // Типы
 interface User {
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         try {
             console.log('Запрашиваю свежие данные профиля...');
-            const { data } = await axios.get('http://localhost:5001/api/users/profile');
+            const { data } = await axios.get(`${API_URL}/api/users/profile`);
             dispatch({ type: 'USER_UPDATED', payload: { user: data } });
             console.log('Данные профиля успешно обновлены!', data);
         } catch (err) {

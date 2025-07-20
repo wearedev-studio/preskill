@@ -1,0 +1,44 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import LoginPage from './pages/LoginPage/LoginPage';
+import AdminLayout from './components/layout/AdminLayout';
+
+import DashboardPage from './pages/DashboardPage/DashboardPage'; // Импортируем нашу новую страницу
+import UsersPage from './pages/UsersPage/UsersPage'; // Импортируем нашу новую страницу
+import TransactionsPage from './pages/TransactionsPage/TransactionsPage'; // Импортируем нашу новую страницу
+import GamesPage from './pages/GamesPage/GamesPage'; // Импортируем нашу новую страницу
+import RoomsPage from './pages/RoomsPage/RoomsPage'; // Импортируем нашу новую страницу
+import CreateRoomPage from './pages/CreateRoomPage/CreateRoomPage'; // Импортируем нашу новую страницу
+import TournamentsPage from './pages/TournamentsPage/TournamentsPage'; // Импортируем нашу новую страницу
+
+function App() {
+    const { isAuthenticated } = useAuth();
+
+    return (
+        <Router>
+            <Routes>
+                {isAuthenticated ? (
+                    <Route path="/*" element={<AdminLayout />}>
+                        <Route index element={<DashboardPage />} />
+                        <Route path="users" element={<UsersPage />} />
+                        <Route path="games" element={<GamesPage />} />
+                        <Route path="transactions" element={<TransactionsPage />} />
+                        <Route path="rooms" element={<RoomsPage />} />
+                        <Route path="tournaments" element={<TournamentsPage />} />
+                        <Route path="create-room" element={<CreateRoomPage />} />
+                        {/* <Route path="settings" element={<SettingsPage />} /> */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Route>
+                ) : (
+                    <>
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="*" element={<Navigate to="/login" replace />} />
+                    </>
+                )}
+            </Routes>
+        </Router>
+    );
+}
+
+export default App;

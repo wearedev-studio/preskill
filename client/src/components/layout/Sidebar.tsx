@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext'; // Импортируем useUI
 import styles from './Sidebar.module.css';
 import { Home, Gamepad2, Trophy, User as UserIcon, Crown, ShieldCheck, LogOut } from 'lucide-react';
+import Avatar from '../../components/common/Avatar'; // 1. Импортируем новый компонент
+
 
 const Sidebar: React.FC = () => {
     const { user, logout } = useAuth();
@@ -16,7 +18,7 @@ const Sidebar: React.FC = () => {
         { path: '/profile', icon: UserIcon, label: 'Настройки профиля' },
     ];
     
-    const initials = user?.username ? user.username.substring(0, 2).toUpperCase() : '??';
+    const initials = <Avatar size="small" />
     
     const getNavLinkClass = ({ isActive }: { isActive: boolean }) => 
         `${styles.navLink} ${isActive ? styles.active : ''}`;

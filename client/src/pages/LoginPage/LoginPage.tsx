@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import styles from './LoginPage.module.css';
 import { Crown } from 'lucide-react';
+import { API_URL } from '../../api/index';
 
 const LoginPage: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -18,7 +19,7 @@ const LoginPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            const res = await axios.post('http://localhost:5001/api/auth/login', { email, password });
+            const res = await axios.post(`${API_URL}/api/auth/login`, { email, password });
             const { token, ...user } = res.data;
             login({ token, user });
             navigate('/');

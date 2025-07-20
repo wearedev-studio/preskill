@@ -124,3 +124,40 @@ export const updateUserBalance = async (req: Request, res: Response) => {
     avatar: user.avatar,
   });
 };
+
+/**
+ * @desc    Update user avatar
+ * @route   PUT /api/users/profile/avatar
+ * @access  Private
+ */
+export const updateUserAvatar = async (req: Request, res: Response) => {
+    try {
+        const user = await User.findById(req.user!._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'Пользователь не найден' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ message: 'Файл не загружен' });
+        }
+
+        // Сохраняем в базу данных путь к файлу
+        // Убираем 'public' из пути, так как мы сделали ее статической
+        const avatarPath = '/' + req.file.path.replace(/\\/g, '/').replace('public/', '');
+        user.avatar = avatarPath;
+        
+        await user.save();
+
+        res.json({
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            balance: user.balance,
+            avatar: user.avatar,
+            role: user.role
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Ошибка сервера', error: error.message });
+    }
+};

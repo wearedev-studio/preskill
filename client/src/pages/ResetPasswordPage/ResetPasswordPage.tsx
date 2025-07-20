@@ -4,6 +4,7 @@ import axios from 'axios';
 import AuthLayout from '../../components/layout/AuthLayout';
 import styles from './ResetPasswordPage.module.css';
 import { KeyRound } from 'lucide-react';
+import { API_URL } from '../../api/index';
 
 const ResetPasswordPage: React.FC = () => {
     const [secretCode, setSecretCode] = useState('');
@@ -28,7 +29,7 @@ const ResetPasswordPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await axios.post('http://localhost:5001/api/auth/reset-password', { email, secretCode, newPassword });
+            await axios.post(`${API_URL}/api/auth/reset-password`, { email, secretCode, newPassword });
             setMessage('Пароль успешно сброшен! Перенаправляем на страницу входа...');
             setTimeout(() => navigate('/login'), 3000);
         } catch (err: any) {

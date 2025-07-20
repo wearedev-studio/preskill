@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { API_URL } from '../api/index';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -15,7 +16,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (token) {
       // Создаем новое соединение при получении токена
-      const newSocket = io('http://localhost:5001', {
+      const newSocket = io(`${API_URL}`, {
         auth: {
           token: token,
         },

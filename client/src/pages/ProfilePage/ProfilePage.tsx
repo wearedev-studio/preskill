@@ -1,9 +1,11 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import Avatar from '../../components/common/Avatar'; // 1. Импортируем новый компонент
 
 import { IGameRecord, ITransaction } from '../../types/entities';
 import styles from './ProfilePage.module.css'; // Import the CSS module
+import { API_URL } from '../../api/index';
 
 // Helper component for the table to keep the main component clean
 const HistoryTable: React.FC<{ headers: string[]; children: React.ReactNode }> = ({ headers, children }) => (
@@ -38,13 +40,16 @@ const ProfilePage: React.FC = () => {
     const [balanceAmount, setBalanceAmount] = useState('');
     const [balanceMessage, setBalanceMessage] = useState({ type: '', text: '' });
 
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
     const fetchHistory = async () => {
         setHistoryError('');
         setLoadingHistory(true);
         try {
             const [gamesRes, transactionsRes] = await Promise.all([
-                axios.get('http://localhost:5001/api/users/history/games'),
-                axios.get('http://localhost:5001/api/users/history/transactions'),
+                axios.get(`${API_URL}/api/users/history/games`),
+                axios.get(`${API_URL}/api/users/history/transactions`),
             ]);
             setGameHistory(gamesRes.data);
             setTransactionHistory(transactionsRes.data);
@@ -69,7 +74,7 @@ const ProfilePage: React.FC = () => {
             return;
         }
         try {
-            await axios.put('http://localhost:5001/api/users/profile/password', { currentPassword, newPassword });
+            await axios.put(`${API_URL}/api/users/profile/password`, { currentPassword, newPassword });
             setPasswordMessage({ type: 'success', text: 'Пароль успешно обновлен!' });
             setCurrentPassword('');
             setNewPassword('');
@@ -92,7 +97,7 @@ const ProfilePage: React.FC = () => {
         const amountToSend = operation === 'deposit' ? Number(balanceAmount) : -Number(balanceAmount);
         
         try {
-            await axios.post('http://localhost:5001/api/users/balance', { amount: amountToSend });
+            await axios.post(`${API_URL}/api/users/balance`, { amount: amountToSend });
             setBalanceMessage({ type: 'success', text: 'Баланс успешно обновлен!' });
             setBalanceAmount('');
             fetchHistory();
@@ -100,6 +105,33 @@ const ProfilePage: React.FC = () => {
              setBalanceMessage({ type: 'error', text: err.response?.data?.message || 'Ошибка операции' });
         }
     }
+
+    // --- НОВЫЕ ОБРАБОТЧИКИ ДЛЯ АВАТАРА ---
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setAvatarFile(file);
+            setAvatarPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleAvatarUpload = async () => {
+        if (!avatarFile) return;
+
+        const formData = new FormData();
+        formData.append('avatar', avatarFile);
+
+        try {
+            await axios.put(`${API_URL}/api/users/profile/avatar`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            await refreshUser(); // Обновляем данные пользователя везде
+            setAvatarFile(null);
+            setAvatarPreview(null);
+        } catch (error) {
+            alert('Не удалось загрузить аватар. Убедитесь, что это изображение и его размер не превышает 5МБ.');
+        }
+    };
 
     if (!user) {
         return (
@@ -123,9 +155,27 @@ const ProfilePage: React.FC = () => {
                 <div className={styles.profileSection}>
                     <h3>Основная информация</h3>
                     <div className={styles.profileHeader}>
-                        <div className={styles.profileAvatar}>{user.username.charAt(0).toUpperCase()}</div>
-                        <div className={styles.profileInfo}>
+                            <div className={styles.avatarContainer}>
+                            {/* <img 
+                                src={avatarPreview || (user?.avatar.startsWith('/') ? `http://localhost:5001${user.avatar}` : '/default-avatar.png')} 
+                                alt="Аватар" 
+                                className={styles.profileAvatarImg} 
+                            /> */}
+                             {avatarPreview ? (
+                                <img src={avatarPreview} alt="Предпросмотр" className={styles.profileAvatarImg} />
+                           ) : (
+                                <Avatar size="large" />
+                           )}
+                            <label htmlFor="avatarInput" className={styles.avatarEditButton}>✏️</label>
+                            <input id="avatarInput" type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                        </div>                        <div className={styles.profileInfo}>
                             <h2>{user.username}</h2>
+                            {avatarFile && (
+                        <div className={styles.avatarActions}>
+                            <button onClick={handleAvatarUpload} className={`${styles.btn} ${styles.btnPrimary}`}>Сохранить аватар</button>
+                            <button onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className={`${styles.btn} ${styles.btnSecondary}`}>Отмена</button>
+                        </div>
+                    )}
                             <p><strong>Email:</strong> {user.email}</p>
                             <p><strong>Баланс:</strong> <span className={styles.balanceHighlight}>${user.balance.toFixed(2)}</span></p>
                         </div>

@@ -4,6 +4,7 @@ import axios from 'axios';
 import AuthLayout from '../../components/layout/AuthLayout';
 import styles from './ForgotPasswordPage.module.css';
 import { Crown } from 'lucide-react';
+import { API_URL } from '../../api/index';
 
 const ForgotPasswordPage: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -18,7 +19,7 @@ const ForgotPasswordPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await axios.post('http://localhost:5001/api/auth/forgot-password', { email });
+            await axios.post(`${API_URL}/api/auth/forgot-password`, { email });
             setMessage('Код для сброса "отправлен". Сейчас вы будете перенаправлены.');
             setTimeout(() => {
                 navigate('/reset-password', { state: { email } });

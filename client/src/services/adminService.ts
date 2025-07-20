@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { ITournament } from './tournamentService';
 
+import { API_URL } from '../api/index';
+
 interface TournamentCreationData {
     name: string;
     gameType: string;
@@ -14,7 +16,7 @@ interface TournamentCreationData {
  * @param tournamentData - Данные для создания турнира
  */
 export const createTournament = async (tournamentData: TournamentCreationData): Promise<ITournament> => {
-    const { data } = await axios.post('http://localhost:5001/api/admin/tournaments', tournamentData);
+    const { data } = await axios.post(`${API_URL}/api/admin/tournaments`, tournamentData);
     return data;
 };
 
@@ -23,7 +25,7 @@ export const createTournament = async (tournamentData: TournamentCreationData): 
  * @param roomData - Данные для создания комнаты
  */
 export const createLobbyRoom = async (roomData: { gameType: string, bet: number }) => {
-    const { data } = await axios.post('http://localhost:5001/api/admin/create-room', roomData);
+    const { data } = await axios.post(`${API_URL}/api/admin/create-room`, roomData);
     return data;
 }
 
@@ -31,6 +33,6 @@ export const createLobbyRoom = async (roomData: { gameType: string, bet: number 
  * Отправляет запрос на принудительный старт турнира
  */
 export const forceStartTournament = async (id: string): Promise<{ message: string }> => {
-    const { data } = await axios.post(`http://localhost:5001/api/admin/tournaments/${id}/start`);
+    const { data } = await axios.post(`${API_URL}/api/admin/tournaments/${id}/start`);
     return data;
 };

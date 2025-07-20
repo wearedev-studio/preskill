@@ -2,6 +2,7 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path'; // 1. Импортируем path
 
 // Import Routes
 import authRoutes from './routes/auth.routes';
@@ -13,6 +14,9 @@ import notificationRoutes from './routes/notification.routes';
 dotenv.config();
 
 const app: Application = express();
+
+// 2. Делаем папку 'public' статической, чтобы файлы из нее были доступны по URL
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Connecting Middlewares
 app.use(cors());

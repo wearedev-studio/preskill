@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import styles from './RegisterPage.module.css';
 import { Crown, UserPlus } from 'lucide-react';
+import { API_URL } from '../../api/index';
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -17,7 +18,7 @@ const RegisterPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await axios.post('http://localhost:5001/api/auth/register', { username, email, password });
+            await axios.post(`${API_URL}/api/auth/register`, { username, email, password });
             navigate('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Ошибка регистрации.');
