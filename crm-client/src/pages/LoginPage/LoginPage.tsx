@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
+import { Crown } from 'lucide-react';
+import AuthLayout from '../../components/layout/AuthLayout';
+import styles from './LoginPage.module.css';
+
 import { API_URL } from '../../api';
 
 const LoginPage: React.FC = () => {
@@ -20,19 +24,26 @@ const LoginPage: React.FC = () => {
         }
     };
 
-    // Стили можно будет вынести в CSS модуль позже
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-            <div style={{ width: '100%', maxWidth: '400px', padding: '2rem', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                <h2 style={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Вход в CRM</h2>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" required style={{ padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }} />
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль" required style={{ padding: '0.75rem', borderRadius: '6px', border: '1px solid #e2e8f0' }} />
-                    {error && <p style={{ color: 'red', textAlign: 'center' }}>{error}</p>}
-                    <button type="submit" style={{ padding: '0.75rem', borderRadius: '6px', border: 'none', backgroundColor: '#2563eb', color: 'white', cursor: 'pointer' }}>Войти</button>
-                </form>
+        <AuthLayout>
+            <div className={styles.authHeader}>
+                <div className={styles.logoIconContainer}><Crown /></div>
+                        <h1 className={styles.logoText}>Skill Games</h1>
+                <p className={styles.authSubtitle}>Доступ только для администраторов</p>
             </div>
-        </div>
+            <form onSubmit={handleSubmit} className={styles.authForm}>
+                <div className={styles.formGroup}>
+                    <label htmlFor="email" className={styles.formLabel}>Email</label>
+                    <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required className={styles.formInput} placeholder="admin@example.com"/>
+                </div>
+                <div className={styles.formGroup}>
+                    <label htmlFor="password" className={styles.formLabel}>Пароль</label>
+                    <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required className={styles.formInput} placeholder="••••••••" />
+                </div>
+                {error && <div className={styles.alertError}><p>{error}</p></div>}
+                <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>Войти</button>
+            </form>
+        </AuthLayout>
     );
 };
 

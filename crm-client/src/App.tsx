@@ -11,15 +11,21 @@ import GamesPage from './pages/GamesPage/GamesPage'; // Импортируем �
 import RoomsPage from './pages/RoomsPage/RoomsPage'; // Импортируем нашу новую страницу
 import CreateRoomPage from './pages/CreateRoomPage/CreateRoomPage'; // Импортируем нашу новую страницу
 import TournamentsPage from './pages/TournamentsPage/TournamentsPage'; // Импортируем нашу новую страницу
-
 function App() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, loading } = useAuth();
+
+    if (loading) {
+        // Простой экран загрузки, пока мы проверяем токен
+        return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Загрузка...</div>;
+    }
 
     return (
         <Router>
             <Routes>
                 {isAuthenticated ? (
-                    <Route path="/*" element={<AdminLayout />}>
+                    // Если пользователь АВТОРИЗОВАН, показываем основной шаблон
+                    <Route path="/" element={<AdminLayout />}>
+                        {/* Вложенные роуты для страниц внутри админки */}
                         <Route index element={<DashboardPage />} />
                         <Route path="users" element={<UsersPage />} />
                         <Route path="games" element={<GamesPage />} />
@@ -27,12 +33,14 @@ function App() {
                         <Route path="rooms" element={<RoomsPage />} />
                         <Route path="tournaments" element={<TournamentsPage />} />
                         <Route path="create-room" element={<CreateRoomPage />} />
-                        {/* <Route path="settings" element={<SettingsPage />} /> */}
+                        {/* Любой другой путь внутри админки перенаправляем на дашборд */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Route>
                 ) : (
+                    // Если пользователь НЕ АВТОРИЗОВАН, показываем только страницу входа
                     <>
                         <Route path="/login" element={<LoginPage />} />
+                        {/* Любой другой путь перенаправляем на страницу входа */}
                         <Route path="*" element={<Navigate to="/login" replace />} />
                     </>
                 )}
