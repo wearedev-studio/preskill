@@ -24,7 +24,7 @@ export const UIProvider = ({ children }: { children: ReactNode }) => {
         try {
             window.localStorage.setItem('sidebarOpen', JSON.stringify(isSidebarOpen));
         } catch (error) {
-            console.error("Не удалось сохранить состояние сайдбара:", error);
+            console.error("Failed to save sidebar state:", error);
         }
     }, [isSidebarOpen]);
     

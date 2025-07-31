@@ -24,7 +24,7 @@ const LoginPage: React.FC = () => {
             login({ token, user });
             navigate('/');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Ошибка входа. Проверьте данные.');
+            setError(err.response?.data?.message || 'Login error. Please check your details..');
         } finally {
             setIsLoading(false);
         }
@@ -36,15 +36,15 @@ const LoginPage: React.FC = () => {
                 <div className={styles.authHeader}>
                     <div className={styles.logo}>
                         <div className={styles.logoIconContainer}><Crown /></div>
-                        <h1 className={styles.logoText}>Skill Games</h1>
+                        <h1 className={styles.logoText}>Skill Game</h1>
                     </div>
-                    <h2 className={styles.authTitle}>Вход в систему</h2>
-                    <p className={styles.authSubtitle}>Добро пожаловать обратно!</p>
+                    <h2 className={styles.authTitle}>Log In</h2>
+                    <p className={styles.authSubtitle}>Welcome back!</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className={styles.authForm}>
                     <div className={styles.formGroup}>
-                        <label htmlFor="email" className={styles.formLabel}>Email адрес</label>
+                        <label htmlFor="email" className={styles.formLabel}>Email address</label>
                         <input
                             id="email"
                             type="email"
@@ -57,7 +57,7 @@ const LoginPage: React.FC = () => {
                     </div>
 
                     <div className={styles.formGroup}>
-                        <label htmlFor="password" className={styles.formLabel}>Пароль</label>
+                        <label htmlFor="password" className={styles.formLabel}>Password</label>
                         <input
                             id="password"
                             type="password"
@@ -73,18 +73,18 @@ const LoginPage: React.FC = () => {
 
                     <button type="submit" disabled={isLoading} className={`${styles.btn} ${styles.btnPrimary}`}>
                         {isLoading ? (
-                            <><div className={styles.spinner}></div><span>Вход...</span></>
-                        ) : ( "Войти" )}
+                            <><div className={styles.spinner}></div><span>Log In...</span></>
+                        ) : ( "Login" )}
                     </button>
                 </form>
 
                 <div className={styles.authFooter}>
                     <p>
-                        <Link to="/forgot-password" className={styles.authLink}>Забыли пароль?</Link>
+                        <Link to="/forgot-password" className={styles.authLink}>Forgot your password??</Link>
                     </p>
                     <p style={{ marginTop: '0.5rem' }}>
-                        Нет аккаунта?{' '}
-                        <Link to="/register" className={styles.authLink}>Зарегистрироваться</Link>
+                        No account?{' '}
+                        <Link to="/register" className={styles.authLink}>Sign Up</Link>
                     </p>
                 </div>
             </div>

@@ -12,10 +12,10 @@ const Sidebar: React.FC = () => {
     const { isSidebarOpen, setSidebarOpen } = useUI(); // Берем состояние и функцию из контекста
 
     const menuItems = [
-        { path: '/', icon: Home, label: 'Панель управления' },
-        { path: '/games', icon: Gamepad2, label: 'Игры' },
-        { path: '/tournaments', icon: Trophy, label: 'Турниры' },
-        { path: '/profile', icon: UserIcon, label: 'Настройки профиля' },
+        { path: '/', icon: Home, label: 'Dashboard' },
+        { path: '/games', icon: Gamepad2, label: 'Games' },
+        { path: '/tournaments', icon: Trophy, label: 'Tournaments' },
+        { path: '/profile', icon: UserIcon, label: 'Profile' },
     ];
     
     const initials = <Avatar size="small" />
@@ -34,8 +34,8 @@ const Sidebar: React.FC = () => {
                     <Link to="/" className={styles.logoArea}>
                         <div className={styles.logoIconContainer}><Crown /></div>
                         <div className={styles.logoText}>
-                            <h1>Skill Games</h1>
-                            <p>Игровая платформа</p>
+                            <h1>Skill Game</h1>
+                            <p>Game platform</p>
                         </div>
                     </Link>
                 {/* </div> */}
@@ -59,7 +59,7 @@ const Sidebar: React.FC = () => {
                             className={getNavLinkClass}
                         >
                             <ShieldCheck />
-                            <span>Админка</span>
+                            <span>Admin tools(demo)</span>
                         </NavLink>
                     )}
                 </nav>
@@ -68,13 +68,13 @@ const Sidebar: React.FC = () => {
                      <div className={styles.profileInfo}>
                         <div className={styles.avatar}>{initials}</div>
                         <div>
-                            <p className={styles.username}>{user?.username || 'Игрок'}</p>
-                            <p className={styles.userStatus}>{user?.role === 'ADMIN' ? 'Администратор' : 'Участник'}</p>
+                            <p className={styles.username}>{user?.username || 'Gamer'}</p>
+                            <p className={styles.userStatus}>{user?.role === 'ADMIN' ? 'Admin' : 'Gamer'}</p>
                         </div>
                     </div>
                      <button onClick={logout} className={`${styles.navLink} w-full mt-4`}>
                         <LogOut />
-                        <span>Выйти</span>
+                        <span>Log out</span>
                     </button>
                 </div>
             </div>

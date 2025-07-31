@@ -21,7 +21,7 @@ const RegisterPage: React.FC = () => {
             await axios.post(`${API_URL}/api/auth/register`, { username, email, password });
             navigate('/login');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Ошибка регистрации.');
+            setError(err.response?.data?.message || 'Registration error.');
         } finally {
             setIsLoading(false);
         }
@@ -33,15 +33,15 @@ const RegisterPage: React.FC = () => {
                 <div className={styles.authHeader}>
                     <div className={styles.logo}>
                         <div className={styles.logoIconContainer}><Crown /></div>
-                        <h1 className={styles.logoText}>GameHub</h1>
+                        <h1 className={styles.logoText}>Skill Game</h1>
                     </div>
-                    <h2 className={styles.authTitle}>Создание аккаунта</h2>
-                    <p className={styles.authSubtitle}>Присоединяйтесь к нашему сообществу</p>
+                    <h2 className={styles.authTitle}>Create an account</h2>
+                    <p className={styles.authSubtitle}>Join our community</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className={styles.authForm}>
                     <div className={styles.formGroup}>
-                        <label htmlFor="username" className={styles.formLabel}>Имя пользователя</label>
+                        <label htmlFor="username" className={styles.formLabel}>Username</label>
                         <input
                             id="username"
                             type="text"
@@ -49,11 +49,11 @@ const RegisterPage: React.FC = () => {
                             onChange={(e) => setUsername(e.target.value)}
                             required
                             className={styles.formInput}
-                            placeholder="Введите ваше имя"
+                            placeholder="Enter your name"
                         />
                     </div>
                     <div className={styles.formGroup}>
-                        <label htmlFor="email" className={styles.formLabel}>Email адрес</label>
+                        <label htmlFor="email" className={styles.formLabel}>Email address</label>
                         <input
                             id="email"
                             type="email"
@@ -65,7 +65,7 @@ const RegisterPage: React.FC = () => {
                         />
                     </div>
                     <div className={styles.formGroup}>
-                        <label htmlFor="password" className={styles.formLabel}>Пароль</label>
+                        <label htmlFor="password" className={styles.formLabel}>Password</label>
                         <input
                             id="password"
                             type="password"
@@ -73,7 +73,7 @@ const RegisterPage: React.FC = () => {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                             className={styles.formInput}
-                            placeholder="Минимум 6 символов"
+                            placeholder="Minimum 6 characters"
                         />
                     </div>
 
@@ -81,18 +81,18 @@ const RegisterPage: React.FC = () => {
 
                     <button type="submit" disabled={isLoading} className={`${styles.btn} ${styles.btnPrimary}`}>
                         {isLoading ? (
-                            <><div className={styles.spinner}></div><span>Создание...</span></>
+                            <><div className={styles.spinner}></div><span>Creation...</span></>
                         ) : (
-                            "Зарегистрироваться"
+                            "Sign Up"
                         )}
                     </button>
                 </form>
 
                 <div className={styles.authFooter}>
                     <p>
-                        Уже есть аккаунт?{' '}
+                        Already have an account?{' '}
                         <Link to="/login" className={styles.authLink}>
-                            Войти
+                            Log In
                         </Link>
                     </p>
                 </div>

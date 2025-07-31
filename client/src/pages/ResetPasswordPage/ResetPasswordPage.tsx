@@ -18,7 +18,7 @@ const ResetPasswordPage: React.FC = () => {
 
     useEffect(() => {
         if (!email) {
-            setError('Email не найден. Начните процедуру сброса сначала.');
+            setError('Email not found. Please start reset procedure again..');
             setTimeout(() => navigate('/forgot-password'), 3000);
         }
     }, [email, navigate]);
@@ -30,25 +30,25 @@ const ResetPasswordPage: React.FC = () => {
         setIsLoading(true);
         try {
             await axios.post(`${API_URL}/api/auth/reset-password`, { email, secretCode, newPassword });
-            setMessage('Пароль успешно сброшен! Перенаправляем на страницу входа...');
+            setMessage('Password successfully reset! Redirecting to login page...');
             setTimeout(() => navigate('/login'), 3000);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Произошла ошибка.');
+            setError(err.response?.data?.message || 'An error occurred.');
         } finally {
             setIsLoading(false);
         }
     };
 
     if (!email) {
-        return <AuthLayout><div className={styles.alertError}>{error || 'Перенаправление...'}</div></AuthLayout>;
+        return <AuthLayout><div className={styles.alertError}>{error || 'Redirection...'}</div></AuthLayout>;
     }
 
     return (
         <AuthLayout>
             <div className={styles.authHeader}>
                 <div className={styles.authIcon}><KeyRound /></div>
-                <h2 className={styles.authTitle}>Установка нового пароля</h2>
-                <p className={styles.authSubtitle}>для аккаунта: <strong>{email}</strong></p>
+                <h2 className={styles.authTitle}>Setting a new password</h2>
+                <p className={styles.authSubtitle}>for account: <strong>{email}</strong></p>
             </div>
 
             {message ? (
@@ -56,24 +56,24 @@ const ResetPasswordPage: React.FC = () => {
             ) : (
                 <form onSubmit={handleSubmit} className={styles.authForm}>
                     <div className={styles.formGroup}>
-                        <label htmlFor="secretCode" className={styles.formLabel}>Секретный код</label>
-                        <input id="secretCode" type="text" value={secretCode} onChange={(e) => setSecretCode(e.target.value)} required className={styles.formInput} placeholder="Введите код из email" />
+                        <label htmlFor="secretCode" className={styles.formLabel}>Secret code</label>
+                        <input id="secretCode" type="text" value={secretCode} onChange={(e) => setSecretCode(e.target.value)} required className={styles.formInput} placeholder="Enter the code from the email" />
                     </div>
                     <div className={styles.formGroup}>
-                        <label htmlFor="newPassword" className={styles.formLabel}>Новый пароль</label>
-                        <input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={styles.formInput} placeholder="Мин. 6 символов" />
+                        <label htmlFor="newPassword" className={styles.formLabel}>New Password</label>
+                        <input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={styles.formInput} placeholder="Min 6 characters" />
                     </div>
 
                     {error && <div className={styles.alertError}><p>{error}</p></div>}
                     
                     <button type="submit" disabled={isLoading} className={`${styles.btn} ${styles.btnPrimary}`}>
-                        {isLoading ? 'Сохранение...' : 'Сбросить пароль'}
+                        {isLoading ? 'Saving...' : 'Reset password'}
                     </button>
                 </form>
             )}
 
              <div className={styles.authFooter}>
-                <p><Link to="/login" className={styles.authLink}>Вернуться ко входу</Link></p>
+                <p><Link to="/login" className={styles.authLink}>Return to Log In</Link></p>
             </div>
         </AuthLayout>
     );

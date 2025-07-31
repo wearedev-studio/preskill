@@ -20,12 +20,12 @@ const ForgotPasswordPage: React.FC = () => {
         setIsLoading(true);
         try {
             await axios.post(`${API_URL}/api/auth/forgot-password`, { email });
-            setMessage('Код для сброса "отправлен". Сейчас вы будете перенаправлены.');
+            setMessage('The reset code has been "sent". You will now be redirected.');
             setTimeout(() => {
                 navigate('/reset-password', { state: { email } });
             }, 3000);
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Произошла ошибка.');
+            setError(err.response?.data?.message || 'An error occurred.');
         } finally {
             setIsLoading(false);
         }
@@ -36,10 +36,10 @@ const ForgotPasswordPage: React.FC = () => {
             <div className={styles.authHeader}>
                 <div className={styles.logo}>
                     <div className={styles.logoIconContainer}><Crown /></div>
-                    <h1 className={styles.logoText}>GameHub</h1>
+                    <h1 className={styles.logoText}>Skill Game</h1>
                 </div>
-                <h2 className={styles.authTitle}>Восстановление пароля</h2>
-                <p className={styles.authSubtitle}>Введите ваш email для получения кода</p>
+                <h2 className={styles.authTitle}>Password recovery</h2>
+                <p className={styles.authSubtitle}>Enter your Email to receive the code</p>
             </div>
 
             {message ? (
@@ -52,13 +52,13 @@ const ForgotPasswordPage: React.FC = () => {
                     </div>
                     {error && <div className={styles.alertError}><p>{error}</p></div>}
                     <button type="submit" disabled={isLoading} className={`${styles.btn} ${styles.btnPrimary}`}>
-                        {isLoading ? 'Отправка...' : 'Получить код'}
+                        {isLoading ? 'Sending...' : 'Get code'}
                     </button>
                 </form>
             )}
 
             <div className={styles.authFooter}>
-                <p><Link to="/login" className={styles.authLink}>Вернуться ко входу</Link></p>
+                <p><Link to="/login" className={styles.authLink}>Return to Log In</Link></p>
             </div>
         </AuthLayout>
     );

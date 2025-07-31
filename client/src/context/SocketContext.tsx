@@ -11,11 +11,10 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const { token } = useAuth(); // Получаем токен для аутентификации
+  const { token } = useAuth();
 
   useEffect(() => {
     if (token) {
-      // Создаем новое соединение при получении токена
       const newSocket = io(`${API_URL}`, {
         auth: {
           token: token,
@@ -23,12 +22,10 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       });
       setSocket(newSocket);
 
-      // Закрываем соединение при выходе пользователя
       return () => {
         newSocket.close();
       };
     } else {
-      // Если токена нет, убеждаемся, что сокет закрыт
       if (socket) {
         socket.close();
         setSocket(null);

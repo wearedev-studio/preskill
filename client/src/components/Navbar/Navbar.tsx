@@ -46,10 +46,10 @@ const Navbar: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {isAuthenticated && user ? (
           <>
-            <Link to="/profile" style={linkStyle}>Профиль</Link>
-            <span style={{ color: 'lightgreen' }}>Баланс: ${user.balance.toFixed(2)}</span>
+            <Link to="/profile" style={linkStyle}>Profile</Link>
+            <span style={{ color: 'lightgreen' }}>Balance: ${user.balance.toFixed(2)}</span>
             <span>({user.username})</span>
-            <Link to="/tournaments" style={{...linkStyle, marginLeft: '1rem' }}>Турниры</Link>
+            <Link to="/tournaments" style={{...linkStyle, marginLeft: '1rem' }}>Tournaments</Link>
             <Link to="/notifications" style={{ position: 'relative', textDecoration: 'none', color: 'white', fontSize: '1.5rem' }}>
                 🔔
                 {unreadCount > 0 && (
@@ -71,15 +71,15 @@ const Navbar: React.FC = () => {
                     </span>
                 )}
             </Link>
-            <button onClick={handleLogout}>Выйти</button>
+            <button onClick={handleLogout}>Log out</button>
             {user?.role === 'ADMIN' && (
-              <Link to="/admin" style={{...linkStyle, marginLeft: '1rem' }}>Админка</Link>
+              <Link to="/admin" style={{...linkStyle, marginLeft: '1rem' }}>Admin panel</Link>
             )}
           </>
         ) : (
           <>
-            <Link to="/login" style={linkStyle}>Вход</Link>
-            <Link to="/register" style={linkStyle}>Регистрация</Link>
+            <Link to="/login" style={linkStyle}>Log In</Link>
+            <Link to="/register" style={linkStyle}>Sign Up</Link>
           </>
         )}
       </div>

@@ -11,6 +11,8 @@ import GamesPage from './pages/GamesPage/GamesPage'; // Импортируем �
 import RoomsPage from './pages/RoomsPage/RoomsPage'; // Импортируем нашу новую страницу
 import CreateRoomPage from './pages/CreateRoomPage/CreateRoomPage'; // Импортируем нашу новую страницу
 import TournamentsPage from './pages/TournamentsPage/TournamentsPage'; // Импортируем нашу новую страницу
+import KYCPage from './pages/KYCPage/KYCPage'; // <-- Импорт
+
 function App() {
     const { isAuthenticated, loading } = useAuth();
 
@@ -32,6 +34,7 @@ function App() {
                         <Route path="transactions" element={<TransactionsPage />} />
                         <Route path="rooms" element={<RoomsPage />} />
                         <Route path="tournaments" element={<TournamentsPage />} />
+                        <Route path="kyc" element={<KYCPage />} /> {/* <-- Новый роут */}
                         <Route path="create-room" element={<CreateRoomPage />} />
                         {/* Любой другой путь внутри админки перенаправляем на дашборд */}
                         <Route path="*" element={<Navigate to="/" replace />} />

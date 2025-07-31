@@ -64,18 +64,18 @@ const GamePage: React.FC = () => {
         };
         const onGameUpdate = (state: GameRoomState) => setRoomState(state);
         const onGameEnd = async ({ winner, isDraw }: { winner: Player | null, isDraw: boolean }) => {
-            if (isDraw) setGameMessage('Ничья!');
-            else if (winner?.user.username === user?.username) setGameMessage('🎉 Вы победили!');
-            else setGameMessage(`Вы проиграли. Победитель: ${winner?.user.username}`);
+            if (isDraw) setGameMessage('Draw!');
+            else if (winner?.user.username === user?.username) setGameMessage('🎉 You won!');
+            else setGameMessage(`You lost. Winner: ${winner?.user.username}`);
 
             try {
                 await refreshUser();
             } catch (error) {
-                console.error("Не удалось обновить профиль после игры", error);
+                console.error("Failed to update profile after game", error);
             }
         };
         const onError = ({ message }: { message: string }) => {
-            setGameMessage(`Ошибка: ${message}`);
+            setGameMessage(`Error: ${message}`);
         };
         
         socket.on('gameStart', onGameStart);
@@ -152,7 +152,7 @@ const GamePage: React.FC = () => {
             case 'checkers':
                 if (myPlayerIndex === -1) return (
                     <div className="alert alert-error">
-                        <p>Ошибка: вы не являетесь игроком в этой комнате.</p>
+                        <p>Error: You are not a player in this room.</p>
                     </div>
                 );
                 return (
@@ -192,7 +192,7 @@ const GamePage: React.FC = () => {
             default:
                 return (
                     <div className="alert alert-error">
-                        <p>Игра "{gameType}" не найдена.</p>
+                        <p>Game "{gameType}" not found.</p>
                     </div>
                 );
         }
@@ -203,7 +203,7 @@ const GamePage: React.FC = () => {
             <div className="loading-container">
                 <div className="loading-content">
                     <div className="spinner"></div>
-                    <p className="loading-text">Загрузка игры...</p>
+                    <p className="loading-text">Loading game...</p>
                 </div>
             </div>
         );
@@ -217,7 +217,7 @@ const GamePage: React.FC = () => {
         <div className={styles.pageContainer}>
             <div className={styles.header}>
                 <button onClick={() => navigate(`/lobby/${gameType}`)} className={styles.backButton}>
-                    ← Назад в лобби
+                    ← Back to lobby
                 </button>
                 <div className={styles.gameHeader}>
                     <div className={styles.gameIcon}>{getGameIcon(gameType)}</div>
@@ -229,15 +229,15 @@ const GamePage: React.FC = () => {
                 <div className={styles.gameInfoGrid}>
                     <div className={styles.gameInfoItem}>
                         <span className={styles.gameInfoIcon}>👥</span>
-                        <div className={styles.gameInfoContent}><p>Игроки</p><p>{user?.username} vs {opponent?.user.username || '...'}</p></div>
+                        <div className={styles.gameInfoContent}><p>Players</p><p>{user?.username} vs {opponent?.user.username || '...'}</p></div>
                     </div>
                     <div className={styles.gameInfoItem}>
                         <span className={styles.gameInfoIcon}>💰</span>
-                        <div className={styles.gameInfoContent}><p>Ставка</p><p>${roomState.bet}</p></div>
+                        <div className={styles.gameInfoContent}><p>Bet</p><p>${roomState.bet}</p></div>
                     </div>
                     <div className={styles.gameInfoItem}>
                         <span className={styles.gameInfoIcon}>🏆</span>
-                        <div className={styles.gameInfoContent}><p>Приз</p><p>${roomState.bet * 2}</p></div>
+                        <div className={styles.gameInfoContent}><p>Prise</p><p>${roomState.bet * 2}</p></div>
                     </div>
                 </div>
             </div>
@@ -246,24 +246,24 @@ const GamePage: React.FC = () => {
                 {isWaitingForOpponent ? (
                     <div className={`${styles.statusMessage} ${styles.statusWaiting}`}>
                         <div className={styles.statusIcon}>⏰</div>
-                        <h3 className={styles.statusTitleWaiting}>⏳ Ожидание оппонента...</h3>
-                        <p>Автоматическая отмена через: <span style={{fontWeight: 'bold'}}>{countdown} сек</span></p>
+                        <h3 className={styles.statusTitleWaiting}>⏳ Waiting for the opponent...</h3>
+                        <p>Automatic cancellation after: <span style={{fontWeight: 'bold'}}>{countdown} s</span></p>
                     </div>
                 ) : !gameMessage ? (
                     <div className={`${styles.statusMessage} ${isMyTurn ? styles.statusTurn : styles.statusOpponentTurn}`}>
                         <h3 className={`${styles.statusTitle} ${isMyTurn ? styles.statusTitleMyTurn : styles.statusTitleOpponentTurn}`}>
-                            {isMyTurn ? '✅ Ваш ход' : '⏳ Ход противника'}
+                            {isMyTurn ? '✅ Your move' : '⏳ Opponents move'}
                         </h3>
                     </div>
                 ) : (
                     <div className={`${styles.statusMessage} ${styles.statusGameEnd}`}>
                         <div className={styles.statusIcon}>
-                            {gameMessage.includes('победили') ? '🏆' : gameMessage.includes('Ничья') ? '🤝' : '😔'}
+                            {gameMessage.includes('won') ? '🏆' : gameMessage.includes('Draw') ? '🤝' : '😔'}
                         </div>
                         <h3 className={`${styles.statusTitle} ${styles.statusTitleEnd}`}>{gameMessage}</h3>
                         <div className={styles.statusCountdown}>
-                            <p>Возвращение в лобби через: <span style={{fontWeight: 'bold'}}>{redirectCountdown} сек</span></p>
-                            <button onClick={() => navigate(`/lobby/${gameType}`)} className={`${styles.btn} ${styles.btnPrimary}`}>Вернуться сейчас</button>
+                            <p>Return to lobby in: <span style={{fontWeight: 'bold'}}>{redirectCountdown} s</span></p>
+                            <button onClick={() => navigate(`/lobby/${gameType}`)} className={`${styles.btn} ${styles.btnPrimary}`}>Back now</button>
                         </div>
                     </div>
                 )}
@@ -276,7 +276,7 @@ const GamePage: React.FC = () => {
             {!gameMessage && (
                 <div style={{textAlign: 'center'}}>
                     <button onClick={handleLeaveGame} className={`${styles.btn} ${styles.btnDanger}`}>
-                        {isWaitingForOpponent ? 'Отменить поиск' : 'Сдаться'}
+                        {isWaitingForOpponent ? 'Cancel search' : 'Surrender'}
                     </button>
                 </div>
             )}

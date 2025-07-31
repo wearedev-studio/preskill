@@ -1,6 +1,13 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// Интерфейс для загруженного документа
+interface IKycDocument {
+    documentType: 'PASSPORT' | 'UTILITY_BILL' | 'INTERNATIONAL_PASSPORT' | 'RESIDENCE_PERMIT';
+    filePath: string;
+    submittedAt: Date;
+}
+
 // Обновляем интерфейс, добавляя необязательные поля
 export interface IUser extends Document {
   username: string;
@@ -12,7 +19,16 @@ export interface IUser extends Document {
   passwordResetCode?: string; // Код для сброса пароля
   passwordResetExpires?: Date; // Время истечения кода
   comparePassword(enteredPassword: string): Promise<boolean>;
+  kycStatus: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  kycDocuments: IKycDocument[];
+  kycRejectionReason?: string;
 }
+
+const kycDocumentSchema = new Schema<IKycDocument>({
+    documentType: { type: String, required: true, enum: ['PASSPORT', 'UTILITY_BILL', 'INTERNATIONAL_PASSPORT', 'RESIDENCE_PERMIT'] },
+    filePath: { type: String, required: true },
+    submittedAt: { type: Date, default: Date.now },
+}, { _id: false });
 
 const userSchema = new Schema<IUser>({
   // ... существующие поля (username, email, password, avatar, balance) ...
@@ -36,6 +52,13 @@ const userSchema = new Schema<IUser>({
     type: Date,
     select: false, // И это тоже
   },
+  kycStatus: {
+    type: String,
+    enum: ['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED'],
+    default: 'NOT_SUBMITTED',
+  },
+  kycDocuments: [kycDocumentSchema],
+  kycRejectionReason: { type: String },
 }, {
   timestamps: true,
 });

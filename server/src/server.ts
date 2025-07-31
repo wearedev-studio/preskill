@@ -17,7 +17,7 @@ const server = http.createServer(app);
 // Создаем экземпляр Socket.io сервера, привязывая его к нашему HTTP серверу
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // Разрешаем доступ нашему фронтенду
+    origin: ["http://localhost:5173", "http://localhost:5174"], // Разрешаем доступ нашему фронтенду
     methods: ["GET", "POST"]
   }
 });

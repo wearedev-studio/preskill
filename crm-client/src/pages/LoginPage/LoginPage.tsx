@@ -28,8 +28,8 @@ const LoginPage: React.FC = () => {
         <AuthLayout>
             <div className={styles.authHeader}>
                 <div className={styles.logoIconContainer}><Crown /></div>
-                        <h1 className={styles.logoText}>Skill Games</h1>
-                <p className={styles.authSubtitle}>Доступ только для администраторов</p>
+                        <h1 className={styles.logoText}>Skill Game</h1>
+                <p className={styles.authSubtitle}>Access for administrators only</p>
             </div>
             <form onSubmit={handleSubmit} className={styles.authForm}>
                 <div className={styles.formGroup}>
@@ -37,11 +37,11 @@ const LoginPage: React.FC = () => {
                     <input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required className={styles.formInput} placeholder="admin@example.com"/>
                 </div>
                 <div className={styles.formGroup}>
-                    <label htmlFor="password" className={styles.formLabel}>Пароль</label>
+                    <label htmlFor="password" className={styles.formLabel}>Password</label>
                     <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required className={styles.formInput} placeholder="••••••••" />
                 </div>
                 {error && <div className={styles.alertError}><p>{error}</p></div>}
-                <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>Войти</button>
+                <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>Log In</button>
             </form>
         </AuthLayout>
     );

@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import styles from './AdminLayout.module.css';
-import { LayoutDashboard, Users, Gamepad2, List, Home, Trophy, PlusSquare, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Gamepad2, List, Home, Trophy, PlusSquare, Settings, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const Sidebar: React.FC = () => {
@@ -14,6 +14,7 @@ const Sidebar: React.FC = () => {
         { path: '/transactions', icon: List, label: 'Transactions' },
         { path: '/rooms', icon: Home, label: 'Rooms' },
         { path: '/tournaments', icon: Trophy, label: 'Tournaments' },
+        { path: '/kyc', icon: ShieldCheck, label: 'KYC Verification' }, // <-- Новая ссылка
         { path: '/create-room', icon: PlusSquare, label: 'Create Room' },
     ];
 

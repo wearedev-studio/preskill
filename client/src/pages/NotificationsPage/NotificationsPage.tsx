@@ -14,7 +14,7 @@ const NotificationsPage: React.FC = () => {
                 await markNotificationsAsRead();
                 fetchNotifications();
             } catch (error) {
-                console.error("Не удалось отметить уведомления как прочитанные", error);
+                console.error("Failed to mark notifications as read", error);
             }
         };
         markAsRead();
@@ -24,14 +24,14 @@ const NotificationsPage: React.FC = () => {
         <div className={styles.pageContainer}>
             <div className={styles.header}>
                 <span className={styles.headerIcon}>🔔</span>
-                <h1>Уведомления</h1>
+                <h1>Notifications</h1>
             </div>
 
             {notifications.length === 0 ? (
                 <div className={styles.emptyState}>
                     <div className={styles.emptyStateIcon}>📭</div>
-                    <h3>Уведомлений нет</h3>
-                    <p>Здесь будут появляться все важные события.</p>
+                    <h3>No notifications</h3>
+                    <p>All important events will appear here.</p>
                 </div>
             ) : (
                 <div className={styles.notificationList}>

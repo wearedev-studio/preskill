@@ -8,6 +8,9 @@ import { startTournament } from '../services/tournament.service'; // Импор�
 
 import Transaction from '../models/Transaction.model';
 import GameRecord from '../models/GameRecord.model';
+import { createNotification } from '../services/notification.service';
+import path from 'path';
+
 
 
 // Временное хранилище комнат (в идеале должно быть синхронизировано с socket.ts)
@@ -238,6 +241,92 @@ export const getAllGameRecords = async (req: Request, res: Response) => {
     try {
         const games = await GameRecord.find({}).populate('user', 'username').sort({ createdAt: -1 });
         res.json(games);
+    } catch (error) {
+        res.status(500).json({ message: 'Ошибка сервера' });
+    }
+};
+
+/**
+ * [ADMIN] Получить все заявки на KYC
+ */
+export const getKycSubmissions = async (req: Request, res: Response) => {
+    try {
+        const { status } = req.query; // Получаем статус из query-параметров
+        
+        const filter: any = {};
+        if (status && ['PENDING', 'APPROVED', 'REJECTED'].includes(status as string)) {
+            filter.kycStatus = status;
+        } else {
+            // Если статус не указан или некорректен, показываем только заявки в ожидании
+            filter.kycStatus = 'PENDING';
+        }
+
+        const submissions = await User.find(filter).select('username email kycStatus kycDocuments');
+        res.json(submissions);
+    } catch (error) {
+        res.status(500).json({ message: 'Ошибка сервера' });
+    }
+};
+
+/**
+ * [ADMIN] Одобрить или отклонить заявку KYC
+ */
+export const reviewKycSubmission = async (req: Request, res: Response) => {
+    const { userId } = req.params;
+    const { action, reason } = req.body; // action: 'APPROVE' or 'REJECT'
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'Пользователь не найден.' });
+
+        const io: Server = req.app.get('io');
+        
+        if (action === 'APPROVE') {
+            user.kycStatus = 'APPROVED';
+            await createNotification(io, userId, {
+                title: '✅ Верификация пройдена',
+                message: 'Ваш аккаунт был успешно верифицирован!'
+            });
+        } else if (action === 'REJECT' && reason) {
+            user.kycStatus = 'REJECTED';
+            user.kycRejectionReason = reason;
+             await createNotification(io, userId, {
+                title: '❌ Верификация отклонена',
+                message: `Причина: ${reason}`
+            });
+        } else {
+            return res.status(400).json({ message: 'Неверное действие или отсутствует причина отказа.' });
+        }
+        
+        await user.save();
+        res.json({ message: `Заявка пользователя ${user.username} была обработана.` });
+
+    } catch (error) {
+        res.status(500).json({ message: 'Ошибка сервера' });
+    }
+};
+
+/**
+ * [ADMIN] Отдает файл документа KYC для просмотра
+ */
+export const getKycDocument = async (req: Request, res: Response) => {
+    const { userId, fileName } = req.params;
+    try {
+        const user = await User.findById(userId);
+        if (!user || !user.kycDocuments.some(doc => doc.filePath.endsWith(fileName))) {
+            return res.status(404).json({ message: 'Документ не найден или доступ запрещен.' });
+        }
+        
+        // ИСПРАВЛЕНИЕ: Используем path.resolve для построения надежного абсолютного пути
+        const filePath = path.resolve(process.cwd(), `private/kyc-documents/${fileName}`);
+        
+        res.sendFile(filePath, (err) => {
+            if (err) {
+                console.error("File send error:", err);
+                res.status(404).json({ message: "Файл не найден на сервере." });
+            }
+        });
+
     } catch (error) {
         res.status(500).json({ message: 'Ошибка сервера' });
     }

@@ -69,6 +69,20 @@ export interface ICreateTournamentData {
     startTime: string;
 }
 
+// --- НОВЫЙ ФУНКЦИОНАЛ ДЛЯ KYC ---
+
+export interface IKycSubmission {
+    _id: string;
+    username: string;
+    email: string;
+    kycStatus: string;
+    kycDocuments: {
+        documentType: string;
+        filePath: string;
+        submittedAt: string;
+    }[];
+}
+
 // Простой сервис для получения данных
 export const getAdminUsers = async () => {
     const { data } = await axios.get(`${API_URL}/api/admin/users`);
@@ -158,4 +172,43 @@ export const updateAdminTournament = async (tournamentId: string, tournamentData
 export const deleteAdminTournament = async (tournamentId: string): Promise<{ message: string }> => {
     const { data } = await axios.delete(`${API_URL}/api/admin/tournaments/${tournamentId}`);
     return data;
+};
+
+/**
+ * [ADMIN] Получает все заявки на верификацию
+ */
+export const getKycSubmissions = async (status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'): Promise<IKycSubmission[]> => {
+    // Если нужен "ALL", мы просто не передаем параметр, чтобы сервер вернул всех
+    const params = status === 'ALL' ? {} : { status };
+    const { data } = await axios.get(`${API_URL}/api/admin/kyc-submissions`, { params });
+    return data;
+};
+
+/**
+ * [ADMIN] Одобряет или отклоняет заявку
+ */
+export const reviewKycSubmission = async (userId: string, action: 'APPROVE' | 'REJECT', reason?: string) => {
+    const { data } = await axios.post(`${API_URL}/api/admin/kyc-submissions/${userId}/review`, { action, reason });
+    return data;
+};
+
+/**
+ * [ADMIN] Загружает файл документа KYC как Blob-объект
+ */
+export const getKycDocumentFile = async (userId: string, fileName: string): Promise<Blob> => {
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // 1. Вручную достаем токен из хранилища
+    const token = localStorage.getItem('crm_token');
+
+    // 2. Создаем конфиг с заголовком авторизации
+    const config = {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        responseType: 'blob' as 'blob', // Важно: указываем, что ожидаем получить файл
+    };
+
+    // 3. Отправляем запрос с нашей новой конфигурацией
+    const response = await axios.get(`${API_URL}/api/admin/kyc-document/${userId}/${fileName}`, config);
+    return response.data;
 };

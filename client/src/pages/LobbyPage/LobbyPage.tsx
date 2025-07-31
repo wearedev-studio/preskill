@@ -79,34 +79,33 @@ const LobbyPage: React.FC = () => {
     };
 
     if (!user || !gameType) {
-        return <div>Загрузка...</div>;
+        return <div>Loading...</div>;
     }
 
     return (
         <div className={styles.pageContainer}>
             <button onClick={() => navigate('/games')} className={styles.backButton}>
-                ← Назад к играм
+                ← Back to games
             </button>
             
             <div className={styles.gameHeader}>
                 <div className={styles.gameIcon}>{getGameIcon(gameType)}</div>
                 <div>
-                    <h1>Лобби: {formatGameName(gameType)}</h1>
-                    <p>Ваш баланс: <span>${user.balance.toFixed(2)}</span></p>
+                    <h1>Lobby: {formatGameName(gameType)}</h1>
+                    <p>Your balance: <span>${user.balance.toFixed(2)}</span></p>
                 </div>
             </div>
 
-            {error && <div style={{color: 'salmon', textAlign: 'center', marginBottom: '1rem'}}>Ошибка: {error}</div>}
+            {error && <div style={{color: 'salmon', textAlign: 'center', marginBottom: '1rem'}}>Error: {error}</div>}
 
             <div className={styles.mainGrid}>
-                {/* Секция создания комнаты */}
                 <div className={styles.lobbySection}>
                     <div className={styles.lobbySectionHeader}>
                         <span>➕</span>
-                        <h2 className={styles.lobbySectionTitle}>Создать игру</h2>
+                        <h2 className={styles.lobbySectionTitle}>Create a game</h2>
                     </div>
                     <div className={styles.formGroup}>
-                        <label className={styles.formLabel}>Ставка ($)</label>
+                        <label className={styles.formLabel}>Bet ($)</label>
                         <input
                             type="number"
                             value={bet}
@@ -114,34 +113,33 @@ const LobbyPage: React.FC = () => {
                             min="1"
                             max={user.balance}
                             className={styles.formInput}
-                            placeholder="Введите ставку"
+                            placeholder="Enter bet"
                         />
                     </div>
                     <button onClick={handleCreateRoom} disabled={isCreating || bet > user.balance} className={`${styles.btn} ${styles.btnPrimary}`}>
                         {isCreating ? (
                             <>
                                 <div className={styles.spinner}></div>
-                                Создание...
+                                Creation...
                             </>
                         ) : (
-                            `▶️ Создать игру на $${bet}`
+                            `▶️ Create a game on $${bet}`
                         )}
                     </button>
                 </div>
 
-                {/* Секция доступных комнат */}
                 <div className={styles.lobbySection}>
                     <div className={styles.lobbySectionHeader}>
                         <span>👥</span>
-                        <h2 className={styles.lobbySectionTitle}>Доступные игры</h2>
+                        <h2 className={styles.lobbySectionTitle}>Available games</h2>
                     </div>
                     
                     <div className={styles.roomList}>
                         {rooms.length === 0 ? (
                             <div className={styles.emptyState}>
                                 <div>⏰</div>
-                                <p>Нет доступных комнат</p>
-                                <p>Создайте свою игру!</p>
+                                <p>No rooms available</p>
+                                <p>Create your own game!</p>
                             </div>
                         ) : (
                             rooms.map(room => (
@@ -152,11 +150,11 @@ const LobbyPage: React.FC = () => {
                                         </div>
                                         <div className={styles.roomDetails}>
                                             <h4>{room.host.user.username}</h4>
-                                            <p>Ставка: ${room.bet}</p>
+                                            <p>Bet: ${room.bet}</p>
                                         </div>
                                     </div>
                                     <button onClick={() => handleJoinRoom(room.id)} className={`${styles.btn} ${styles.btnPrimary}`}>
-                                        Присоединиться
+                                        Join
                                     </button>
                                 </div>
                             ))

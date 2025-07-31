@@ -13,7 +13,7 @@ const AdminPage: React.FC = () => {
     const [lobbyMessage, setLobbyMessage] = useState('');
 
     // Состояние для формы создания турнира
-    const [tourneyName, setTourneyName] = useState('Ежедневный турнир');
+    const [tourneyName, setTourneyName] = useState('Daily tournament');
     const [tourneyGameType, setTourneyGameType] = useState('chess');
     const [tourneyEntryFee, setTourneyEntryFee] = useState(10);
     const [tourneyMaxPlayers, setTourneyMaxPlayers] = useState(8);
@@ -25,9 +25,9 @@ const AdminPage: React.FC = () => {
         setLobbyMessage('');
         try {
             const data = await createLobbyRoom({ gameType: lobbyGameType, bet: lobbyBet });
-            setLobbyMessage(`Успешно! Комната создана: ${data.room.id}`);
+            setLobbyMessage(`Success! The room has been created.: ${data.room.id}`);
         } catch (error: any) {
-            setLobbyMessage(`Ошибка: ${error.response?.data?.message || 'Что-то пошло не так'}`);
+            setLobbyMessage(`Error: ${error.response?.data?.message || 'Something went wrong'}`);
         }
     };
     
@@ -37,9 +37,9 @@ const AdminPage: React.FC = () => {
         try {
             const tournamentData = { name: tourneyName, gameType: tourneyGameType, entryFee: tourneyEntryFee, maxPlayers: tourneyMaxPlayers, startTime: tourneyStartTime };
             const data = await createTournament(tournamentData);
-            setTourneyMessage(`Успешно! Турнир "${data.name}" создан.`);
+            setTourneyMessage(`Success! Tournament "${data.name}" created.`);
         } catch (error: any) {
-            setTourneyMessage(`Ошибка: ${error.response?.data?.message || 'Что-то пошло не так'}`);
+            setTourneyMessage(`Error: ${error.response?.data?.message || 'Something went wrong'}`);
         }
     };
 
@@ -50,40 +50,40 @@ const AdminPage: React.FC = () => {
                     onClick={() => setActiveTab('createTournament')} 
                     className={`${styles.navButton} ${activeTab === 'createTournament' ? styles.active : ''}`}
                 >
-                    <Trophy /> Создать Турнир
+                    <Trophy /> Create Tournament
                 </button>
                 <button 
                     onClick={() => setActiveTab('createRoom')} 
                     className={`${styles.navButton} ${activeTab === 'createRoom' ? styles.active : ''}`}
                 >
-                    <PlusCircle /> Создать Комнату
+                    <PlusCircle /> Create a Room
                 </button>
             </aside>
 
             <main className={styles.content}>
                 {activeTab === 'createTournament' && (
                     <section>
-                        <h1>Создание Турнира</h1>
+                        <h1>Creating a Tournament</h1>
                         <div className={styles.card}>
-                            <h3>Новый турнир</h3>
+                            <h3>New tournament</h3>
                             <form onSubmit={handleTournamentSubmit} className={styles.form}>
-                                <input type="text" value={tourneyName} onChange={e => setTourneyName(e.target.value)} placeholder="Название турнира" required className={styles.formInput} />
+                                <input type="text" value={tourneyName} onChange={e => setTourneyName(e.target.value)} placeholder="Tournament name" required className={styles.formInput} />
                                 <select value={tourneyGameType} onChange={e => setTourneyGameType(e.target.value)} className={styles.formSelect}>
-                                    <option value="chess">Шахматы</option>
-                                    <option value="checkers">Шашки</option>
-                                    <option value="tic-tac-toe">Крестики-нолики</option>
-                                    <option value="backgammon">Нарды</option>
+                                    <option value="chess">Chess</option>
+                                    <option value="checkers">Checkers</option>
+                                    <option value="tic-tac-toe">Tic Tac Toe</option>
+                                    <option value="backgammon">Backgammon</option>
                                 </select>
-                                <input type="number" value={tourneyEntryFee} onChange={e => setTourneyEntryFee(Number(e.target.value))} min="0" placeholder="Вступительный взнос" className={styles.formInput} />
+                                <input type="number" value={tourneyEntryFee} onChange={e => setTourneyEntryFee(Number(e.target.value))} min="0" placeholder="Entry fee" className={styles.formInput} />
                                 <select value={tourneyMaxPlayers} onChange={e => setTourneyMaxPlayers(Number(e.target.value))} className={styles.formSelect}>
-                                    <option value={4}>4 игрока</option>
-                                    <option value={8}>8 игроков</option>
-                                    <option value={16}>16 игроков</option>
-                                    <option value={32}>32 игрока</option>
+                                    <option value={4}>4 players</option>
+                                    <option value={8}>8 players</option>
+                                    <option value={16}>16 players</option>
+                                    <option value={32}>32 players</option>
                                 </select>
                                 <input type="datetime-local" value={tourneyStartTime} onChange={e => setTourneyStartTime(e.target.value)} required className={styles.formInput} />
-                                <button type="submit" className={styles.formButton}>Создать турнир</button>
-                                {tourneyMessage && <p className={`${styles.message} ${tourneyMessage.startsWith('Ошибка') ? styles.error : styles.success}`}>{tourneyMessage}</p>}
+                                <button type="submit" className={styles.formButton}>Create a tournament</button>
+                                {tourneyMessage && <p className={`${styles.message} ${tourneyMessage.startsWith('Error') ? styles.error : styles.success}`}>{tourneyMessage}</p>}
                             </form>
                         </div>
                     </section>
@@ -91,19 +91,19 @@ const AdminPage: React.FC = () => {
 
                 {activeTab === 'createRoom' && (
                     <section>
-                        <h1>Создание Комнаты в Лобби</h1>
+                        <h1>Creating a Room in the Lobby</h1>
                         <div className={styles.card}>
-                            <h3>Новая комната</h3>
+                            <h3>New room</h3>
                             <form onSubmit={handleLobbySubmit} className={styles.form}>
                                 <select value={lobbyGameType} onChange={e => setLobbyGameType(e.target.value)} className={styles.formSelect}>
-                                    <option value="tic-tac-toe">Крестики-нолики</option>
-                                    <option value="checkers">Шашки</option>
-                                    <option value="chess">Шахматы</option>
-                                    <option value="backgammon">Нарды</option>
+                                    <option value="tic-tac-toe">Tic Tac Toe</option>
+                                    <option value="checkers">Checkers</option>
+                                    <option value="chess">Chess</option>
+                                    <option value="backgammon">Backgammon</option>
                                 </select>
-                                <input type="number" value={lobbyBet} onChange={e => setLobbyBet(Number(e.target.value))} min="1" placeholder="Ставка" className={styles.formInput} />
-                                <button type="submit" className={styles.formButton}>Создать комнату</button>
-                                {lobbyMessage && <p className={`${styles.message} ${lobbyMessage.startsWith('Ошибка') ? styles.error : styles.success}`}>{lobbyMessage}</p>}
+                                <input type="number" value={lobbyBet} onChange={e => setLobbyBet(Number(e.target.value))} min="1" placeholder="Bet" className={styles.formInput} />
+                                <button type="submit" className={styles.formButton}>Create room</button>
+                                {lobbyMessage && <p className={`${styles.message} ${lobbyMessage.startsWith('Error') ? styles.error : styles.success}`}>{lobbyMessage}</p>}
                             </form>
                         </div>
                     </section>

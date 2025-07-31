@@ -21,10 +21,10 @@ const Header: React.FC = () => {
             <div className={styles.rightSection}>
                 <div className={styles.onlineIndicator}>
                     <div className={styles.onlineDot}></div>
-                    <span className="text-sm font-medium">Онлайн</span>
+                    <span className="text-sm font-medium">Online</span>
                 </div>
                 <div className={styles.balance}>
-                    Баланс: ${user?.balance.toFixed(2) || '0.00'}
+                    Balance: ${user?.balance.toFixed(2) || '0.00'}
                 </div>
                 <Link to="/notifications" className={styles.notificationBell}>
                     🔔

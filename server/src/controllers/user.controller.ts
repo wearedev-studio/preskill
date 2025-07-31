@@ -18,7 +18,8 @@ export const getUserProfile = (req: Request, res: Response) => {
       email: req.user.email,
       balance: req.user.balance,
       avatar: req.user.avatar,
-      role: req.user.role
+      role: req.user.role,
+      kycStatus: req.user.kycStatus
     });
   } else {
     // Эта ситуация маловероятна, если `protect` отработал корректно
@@ -160,4 +161,30 @@ export const updateUserAvatar = async (req: Request, res: Response) => {
     } catch (error: any) {
         res.status(500).json({ message: 'Ошибка сервера', error: error.message });
     }
+};
+
+/**
+ * @desc    Submit KYC documents
+ * @route   POST /api/users/kyc
+ */
+export const submitKyc = async (req: Request, res: Response) => {
+    const { documentType } = req.body;
+    const user = await User.findById(req.user!._id);
+
+    if (!user) return res.status(404).json({ message: 'Пользователь не найден' });
+    if (user.kycStatus === 'PENDING' || user.kycStatus === 'APPROVED') {
+        return res.status(400).json({ message: 'Вы уже подали заявку или она одобрена.' });
+    }
+    if (!req.file) return res.status(400).json({ message: 'Файл документа не загружен.' });
+
+    user.kycDocuments.push({
+        documentType,
+        filePath: req.file.path,
+        submittedAt: new Date(),
+    });
+    user.kycStatus = 'PENDING';
+    user.kycRejectionReason = undefined; // Очищаем причину отказа при новой подаче
+    await user.save();
+
+    res.json({ status: user.kycStatus, message: 'Документы успешно отправлены на проверку.' });
 };

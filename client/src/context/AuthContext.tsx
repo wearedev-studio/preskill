@@ -10,6 +10,8 @@ interface User {
   balance: number;
   avatar: string;
   role: string;
+  kycRejectionReason: ReactNode;
+  kycStatus: any;
 }
 
 interface AuthState {
@@ -79,12 +81,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (token) {
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
         try {
-            console.log('Запрашиваю свежие данные профиля...');
+            console.log('Requesting fresh profile data...');
             const { data } = await axios.get(`${API_URL}/api/users/profile`);
             dispatch({ type: 'USER_UPDATED', payload: { user: data } });
-            console.log('Данные профиля успешно обновлены!', data);
+            console.log('Profile data updated successfully!', data);
         } catch (err) {
-            console.error("Ошибка при обновлении профиля, разлогиниваем.", err);
+            console.error("Error updating profile, log out.", err);
             dispatch({ type: 'LOGOUT' });
         }
     } else {

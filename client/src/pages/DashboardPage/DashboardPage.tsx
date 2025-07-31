@@ -40,7 +40,7 @@ const DashboardPage: React.FC = () => {
                 setRecentGames(gamesHistory.slice(0, 4));
                 setUpcomingTournaments(tournamentsRes.filter(t => t.status === 'REGISTERING').slice(0, 3));
             } catch (error) {
-                console.error("Не удалось загрузить данные для дашборда:", error);
+                console.error("Failed to load data for dashboard:", error);
             } finally {
                 setLoading(false);
             }
@@ -49,25 +49,25 @@ const DashboardPage: React.FC = () => {
     }, []);
 
     const statsCards = [
-        { title: 'Всего игр', value: stats.totalGames, icon: Target, color: 'bg-blue-600' },
-        { title: 'Процент побед', value: `${stats.winRate}%`, icon: Trophy, color: 'bg-green-600' },
-        { title: 'Часов сыграно', value: `${stats.hoursPlayed}ч`, icon: Clock, color: 'bg-purple-600' },
-        { title: 'Заработано', value: `$${stats.totalWinnings.toFixed(2)}`, icon: DollarSign, color: 'bg-yellow-600' },
+        { title: 'Total games', value: stats.totalGames, icon: Target, color: 'bg-blue-600' },
+        { title: 'Win percentage', value: `${stats.winRate}%`, icon: Trophy, color: 'bg-green-600' },
+        { title: 'Hours played', value: `${stats.hoursPlayed}h`, icon: Clock, color: 'bg-purple-600' },
+        { title: 'Earned', value: `$${stats.totalWinnings.toFixed(2)}`, icon: DollarSign, color: 'bg-yellow-600' },
     ];
 
-    if (loading) return <div>Загрузка...</div>;
+    if (loading) return <div>Loading...</div>;
 
     return (
         <div className="space-y-6">
             <div className={styles.header}>
                 <div>
-                    <h1>Панель управления</h1>
-                    <p>Добро пожаловать, {user?.username}! Готовы к следующей игре?</p>
+                    <h1>Dashboard</h1>
+                    <p>Welcome, {user?.username}! Ready for the next game?</p>
                 </div>
                 <div className={styles.ratingWidget}>
                     <div className={styles.ratingWidgetText}>
-                        <p>Текущий ранг</p>
-                        <p>Мастер</p>
+                        <p>Current rank</p>
+                        <p>Master</p>
                     </div>
                     <div className={styles.ratingWidgetIcon}><Trophy /></div>
                 </div>
@@ -90,8 +90,8 @@ const DashboardPage: React.FC = () => {
             <div className={styles.layoutGrid}>
                 <div className={styles.contentBox}>
                     <div className={styles.boxHeader}>
-                        <h2>Последние игры</h2>
-                        <Link to="/profile">Показать все</Link>
+                        <h2>Latest games</h2>
+                        <Link to="/profile">Show all</Link>
                     </div>
                     <div className={styles.itemList}>
                         {recentGames.map((game) => (
@@ -100,12 +100,12 @@ const DashboardPage: React.FC = () => {
                                     <div className={styles.gameItemAvatar}>{game.gameName.charAt(0)}</div>
                                     <div className={styles.gameItemText}>
                                         <p>{game.gameName}</p>
-                                        <p>против {game.opponent}</p>
+                                        <p>vs {game.opponent}</p>
                                     </div>
                                 </div>
                                 <div className={styles.gameItemResult}>
                                     <span className={`${styles.badge} ${game.status === 'WON' ? styles.badgeGreen : styles.badgeRed}`}>
-                                        {game.status === 'WON' ? 'Победа' : 'Поражение'}
+                                        {game.status === 'WON' ? 'Won' : 'Lose'}
                                     </span>
                                     <p>{new Date(game.createdAt).toLocaleDateString()}</p>
                                 </div>
@@ -116,8 +116,8 @@ const DashboardPage: React.FC = () => {
 
                 <div className={styles.contentBox}>
                     <div className={styles.boxHeader}>
-                        <h2>Предстоящие турниры</h2>
-                        <Link to="/tournaments">Показать все</Link>
+                        <h2>Upcoming tournaments</h2>
+                        <Link to="/tournaments">Show all</Link>
                     </div>
                     <div className={styles.itemList}>
                         {upcomingTournaments.map((tournament) => (
@@ -129,7 +129,7 @@ const DashboardPage: React.FC = () => {
                                 </div>
                                 <div className={styles.tournamentItemFooter}>
                                     <span>{new Date(tournament.startTime).toLocaleDateString()}</span>
-                                    <div><Users size={16} /><span>{tournament.players.length}/{tournament.maxPlayers} игроков</span></div>
+                                    <div><Users size={16} /><span>{tournament.players.length}/{tournament.maxPlayers} players</span></div>
                                 </div>
                             </Link>
                         ))}

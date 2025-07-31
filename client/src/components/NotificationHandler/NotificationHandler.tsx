@@ -1,10 +1,9 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { toast } from 'react-hot-toast'; // 1. Импортируем компоненты
+import { toast } from 'react-hot-toast';
 import { useSocket } from '../../context/SocketContext';
 
-// Вспомогательный компонент, чтобы использовать хук useNavigate внутри useEffect
 export const NotificationHandler: React.FC = () => {
     const { socket } = useSocket();
     const navigate = useNavigate();
@@ -12,7 +11,6 @@ export const NotificationHandler: React.FC = () => {
     useEffect(() => {
         if (!socket) return;
 
-        // Слушаем универсальное событие 'notification' от сервера
         const handleNotification = (data: { title: string; message: string; link?: string }) => {
             // @ts-ignore
             console.log(message);
@@ -46,5 +44,5 @@ export const NotificationHandler: React.FC = () => {
         };
     }, [socket, navigate]);
 
-    return null; // Компонент ничего не рендерит, он только слушает события
+    return null;
 };

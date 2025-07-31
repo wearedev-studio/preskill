@@ -5,10 +5,12 @@ import {
     getTransactionHistory,
     updateUserPassword,
     updateUserBalance,
-    updateUserAvatar 
+    updateUserAvatar,
+    submitKyc
 } from '../controllers/user.controller';
 import { protect } from '../middleware/auth.middleware';
 import { upload } from '../config/multer'; // Импортируем наш multer
+import { uploadKyc } from '../config/multerKyc'; // Импорт нового multer
 
 const router = Router();
 
@@ -20,5 +22,7 @@ router.route('/history/transactions').get(protect, getTransactionHistory);
 
 router.route('/profile/password').put(protect, updateUserPassword);
 router.route('/balance').post(protect, updateUserBalance);
+router.post('/kyc', protect, uploadKyc.single('document'), submitKyc);
+
 
 export default router;
