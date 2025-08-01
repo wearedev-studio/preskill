@@ -1,0 +1,58 @@
+.boardContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    /* Задаем ширину относительно ширины экрана, но не больше 500px */
+    width: 90vw;
+    max-width: 500px;
+    /* Сохраняем пропорции квадрата */
+    aspect-ratio: 1 / 1;
+    border: 3px solid #5a3a22;
+}
+
+.square {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.square.dark {
+    background-color: #8B4513;
+}
+
+.square.light {
+    background-color: #F0D9B5;
+}
+
+.square.selected {
+    border: 3px solid #64ffda;
+    box-sizing: border-box;
+}
+
+.piece {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    box-shadow: inset 0 -4px 6px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.player0 {
+    background-color: #1e1e1e; /* Черные */
+    color: white;
+}
+.player1 {
+    background-color: #e0e0e0; /* Белые */
+    color: black;
+}

@@ -1,0 +1,13 @@
+.contentContainer {
+    transition: margin-left 0.3s ease-in-out;
+    /* По умолчанию на мобильных отступа нет */
+    margin-left: 0;
+}
+
+/* На больших экранах (lg и выше) */
+@media (min-width: 1024px) {
+    .contentContainer.sidebarOpen {
+        /* Добавляем отступ, равный ширине сайдбара, только если он открыт */
+        margin-left: 16rem; /* 256px */
+    }
+}

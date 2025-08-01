@@ -60,7 +60,7 @@ const DashboardPage: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className={styles.header}>
-                <div>
+                <div className={styles.headerFirst}>
                     <h1>Dashboard</h1>
                     <p>Welcome, {user?.username}! Ready for the next game?</p>
                 </div>

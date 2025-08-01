@@ -31,7 +31,6 @@ const KYCStatus: FC<KYCStatusProps> = ({ user, onVerifyClick }) => {
         REJECTED: { text: "Rejected", style: styles.kycStatus_REJECTED },
     };
     
-    // Используем `user` из пропсов, а не из внешнего скоупа
     // @ts-ignore
     const currentStatus = statusMap[user.kycStatus] || statusMap.NOT_SUBMITTED;
 
@@ -240,130 +239,241 @@ const ProfilePage: React.FC = () => {
     const statusTranslations: Record<IGameRecord['status'], string> = { WON: 'Won', LOST: 'Loss', DRAW: 'Draw' };
     const typeTranslations: Record<ITransaction['type'], string> = { DEPOSIT: 'Deposit', WITHDRAWAL: 'Withdrawal', WAGER_WIN: 'Wager win', WAGER_LOSS: 'Wager loss' };
 
-    return (
-        <div className={styles.pageContainer}>
-            <div className={styles.profileContainer}>
-                {/* Basic Info */}
-                <div className={styles.profileSection}>
-                    <h3>Basic information</h3>
-                    <div className={styles.profileHeader}>
+        return (
+        <>
+            <div className={styles.pageContainer}>
+                <div className={styles.profileContainer}>
+                    <div className={styles.profileSection}>
+                        <h3>Основная информация</h3>
+                        <div className={styles.profileHeader}>
                             <div className={styles.avatarContainer}>
-                            {/* <img 
-                                src={avatarPreview || (user?.avatar.startsWith('/') ? `http://localhost:5001${user.avatar}` : '/default-avatar.png')} 
-                                alt="Аватар" 
-                                className={styles.profileAvatarImg} 
-                            /> */}
-                             {avatarPreview ? (
-                                <img src={avatarPreview} alt="Preview" className={styles.profileAvatarImg} />
-                           ) : (
-                                <Avatar size="large" />
-                           )}
-                            <label htmlFor="avatarInput" className={styles.avatarEditButton}>✏️</label>
-                            <input id="avatarInput" type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-                        </div>                        <div className={styles.profileInfo}>
-                            <h2>{user.username}</h2>
-                            {avatarFile && (
-                        <div className={styles.avatarActions}>
-                            <button onClick={handleAvatarUpload} className={`${styles.btn} ${styles.btnPrimary}`}>Save avatar</button>
-                            <button onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className={`${styles.btn} ${styles.btnSecondary}`}>Cancel</button>
+                                {avatarPreview ? (
+                                    <img src={avatarPreview} alt="Preview" className={styles.profileAvatarImg} />
+                                ) : (
+                                    <Avatar size="large" />
+                                )}
+                                <label htmlFor="avatarInput" className={styles.avatarEditButton}>✏️</label>
+                                <input id="avatarInput" type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                            </div>
+                            <div className={styles.profileInfo}>
+                                <h2>{user.username}</h2>
+                                {avatarFile && (
+                                    <div className={styles.avatarActions}>
+                                        <button onClick={handleAvatarUpload} className={`${styles.btn} ${styles.btnPrimary}`}>Сохранить</button>
+                                        <button onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className={`${styles.btn} ${styles.btnSecondary}`}>Отмена</button>
+                                    </div>
+                                )}
+                                <p><strong>Email:</strong> {user.email}</p>
+                                <p><strong>Баланс:</strong> <span className={styles.balanceHighlight}>${user.balance.toFixed(2)}</span></p>
+                            </div>
                         </div>
-                    )}
-                            <p><strong>Email:</strong> {user.email}</p>
-                            <p><strong>Balance:</strong> <span className={styles.balanceHighlight}>${user.balance.toFixed(2)}</span></p>
+                    </div>
+
+                    <div className={styles.card}>
+                             <h3>Verification(KYC)</h3>
+                             <KYCStatus user={user} onVerifyClick={() => setIsKycModalOpen(true)} />
+                         </div>
+
+                    <div className={styles.profileSection}>
+                        <h3>Настройки безопасности</h3>
+                        <form onSubmit={handlePasswordChange}>
+                            <div className={styles.formGrid}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.formLabel}>Текущий пароль</label>
+                                    <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={styles.formInput} placeholder="Введите текущий пароль" required />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.formLabel}>Новый пароль</label>
+                                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={styles.formInput} placeholder="Введите новый пароль" required />
+                                </div>
+                            </div>
+                            <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>🔒 Сменить пароль</button>
+                            {passwordMessage.text && <div className={`${styles.alert} ${passwordMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{passwordMessage.text}</p></div>}
+                        </form>
+                    </div>
+
+                    <div className={styles.profileSection}>
+                        <h3>Управление балансом (Демо)</h3>
+                        <form>
+                            <div className={styles.formRow}>
+                                <div className={styles.formGroup}>
+                                    <label className={styles.formLabel}>Сумма</label>
+                                    <input type="number" value={balanceAmount} onChange={(e) => setBalanceAmount(e.target.value)} className={styles.formInput} placeholder="Введите сумму" required />
+                                </div>
+                                <button onClick={(e) => handleBalanceUpdate(e, 'deposit')} className={`${styles.btn} ${styles.btnSuccess}`}>💰 Пополнить</button>
+                                <button type="button" onClick={(e) => handleBalanceUpdate(e, 'withdraw')} className={`${styles.btn} ${styles.btnSecondary}`}>💸 Вывести</button>
+                            </div>
+                            {balanceMessage.text && <div className={`${styles.alert} ${balanceMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{balanceMessage.text}</p></div>}
+                        </form>
+                    </div>
+
+                    <div className={styles.profileSection}>
+                        <h3>История игр</h3>
+                        <div className={styles.tableContainer}>
+                            <HistoryTable headers={['Игра', 'Результат', 'Изменение баланса', 'Дата']}>
+                                {gameHistory.map(game => (
+                                    <tr key={game._id}>
+                                        <td>{game.gameName}</td>
+                                        <td>
+                                            <span className={`${styles.badge} ${game.status === 'WON' ? styles.badgeGreen : game.status === 'LOST' ? styles.badgeRed : styles.badgeYellow}`}>
+                                                {statusTranslations[game.status]}
+                                            </span>
+                                        </td>
+                                        <td className={game.amountChanged >= 0 ? styles.amountPositive : styles.amountNegative}>
+                                            {game.amountChanged >= 0 ? '+' : ''}${game.amountChanged.toFixed(2)}
+                                        </td>
+                                        <td>{new Date(game.createdAt).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                            </HistoryTable>
                         </div>
-                        <div className={styles.card}>
-                            <h3>Verification(KYC)</h3>
-                            <KYCStatus user={user} onVerifyClick={() => setIsKycModalOpen(true)} />
+                    </div>
+
+                    <div className={styles.profileSection}>
+                        <h3>История транзакций</h3>
+                        <div className={styles.tableContainer}>
+                            <HistoryTable headers={['Тип', 'Статус', 'Сумма', 'Дата']}>
+                                {transactionHistory.map(tx => (
+                                    <tr key={tx._id}>
+                                        <td>{typeTranslations[tx.type] || tx.type}</td>
+                                        <td>{tx.status}</td>
+                                        <td>${tx.amount.toFixed(2)}</td>
+                                        <td>{new Date(tx.createdAt).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                            </HistoryTable>
                         </div>
                     </div>
                 </div>
-
-                {/* Security Settings */}
-                <div className={styles.profileSection}>
-                    <h3>Security settings</h3>
-                    <h4 style={{ fontWeight: 500, color: '#a1a1aa', marginBottom: '1rem' }}>Change password</h4>
-                    <form onSubmit={handlePasswordChange}>
-                        <div className={styles.formGrid}>
-                            <div className={styles.formGroup}>
-                                <label className={styles.formLabel}>Current Password</label>
-                                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={styles.formInput} placeholder="Enter your current password" required />
-                            </div>
-                            <div className={styles.formGroup}>
-                                <label className={styles.formLabel}>New Password</label>
-                                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={styles.formInput} placeholder="Enter new password" required />
-                            </div>
-                        </div>
-                        <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>🔒 Change password</button>
-                        {passwordMessage.text && <div className={`${styles.alert} ${passwordMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{passwordMessage.text}</p></div>}
-                    </form>
-                </div>
-
-                {/* Balance Management */}
-                <div className={styles.profileSection}>
-                    <h3>Balance Management (Demo)</h3>
-                    <form>
-                        <div className={styles.formRow}>
-                            <div className={styles.formGroup}>
-                                <label className={styles.formLabel}>Amount</label>
-                                <input type="number" value={balanceAmount} onChange={(e) => setBalanceAmount(e.target.value)} className={styles.formInput} placeholder="Enter the amount" required />
-                            </div>
-                            <button onClick={(e) => handleBalanceUpdate(e, 'deposit')} className={`${styles.btn} ${styles.btnSuccess}`}>💰  Top up</button>
-                            <button type="button" onClick={(e) => handleBalanceUpdate(e, 'withdraw')} className={`${styles.btn} ${styles.btnSecondary}`}>💸 Withdraw</button>
-                        </div>
-                        {balanceMessage.text && <div className={`${styles.alert} ${balanceMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{balanceMessage.text}</p></div>}
-                    </form>
-                </div>
-
-                {/* Game History */}
-                <div className={styles.profileSection}>
-                    <h3>History of games</h3>
-                    {loadingHistory && <p>Loading...</p>}
-                    {historyError && <div className={`${styles.alert} ${styles.alertError}`}>{historyError}</div>}
-                    {!loadingHistory && !historyError && (
-                        <HistoryTable headers={['Game', 'Result', 'Balance Change', 'Date']}>
-                            {gameHistory.map(game => (
-                                <tr key={game._id}>
-                                    <td>{game.gameName}</td>
-                                    <td>
-                                        <span className={`${styles.badge} ${game.status === 'WON' ? styles.badgeGreen : game.status === 'LOST' ? styles.badgeRed : styles.badgeYellow}`}>
-                                            {statusTranslations[game.status]}
-                                        </span>
-                                    </td>
-                                    <td className={game.amountChanged >= 0 ? styles.amountPositive : styles.amountNegative}>
-                                        {game.amountChanged >= 0 ? '+' : ''}${game.amountChanged.toFixed(2)}
-                                    </td>
-                                    <td>{new Date(game.createdAt).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </HistoryTable>
-                    )}
-                </div>
-
-                {/* Transaction History */}
-                <div className={styles.profileSection}>
-                    <h3>Transaction history</h3>
-                    {loadingHistory && <p>Loading...</p>}
-                    {historyError && <div className={`${styles.alert} ${styles.alertError}`}>{historyError}</div>}
-                    {!loadingHistory && !historyError && (
-                         <HistoryTable headers={['Type', 'Status', 'Amount', 'Date']}>
-                           {transactionHistory.map(tx => (
-                                <tr key={tx._id}>
-                                    <td>{typeTranslations[tx.type]}</td>
-                                    <td>{tx.status}</td>
-                                    <td>${tx.amount.toFixed(2)}</td>
-                                    <td>{new Date(tx.createdAt).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </HistoryTable>
-                    )}
-                </div>
             </div>
-            <KycModal isOpen={isKycModalOpen} 
-                onClose={() => setIsKycModalOpen(false)}
-                onSuccess={handleKycSuccess} />
-
-        </div>
+            <KycModal isOpen={isKycModalOpen} onClose={() => setIsKycModalOpen(false)} onSuccess={handleKycSuccess} />
+        </>
     );
+
+    // return (
+    //     <div className={styles.pageContainer}>
+    //         <div className={styles.profileContainer}>
+    //             {/* Basic Info */}
+    //             <div className={styles.profileSection}>
+    //                 <h3>Basic information</h3>
+    //                 <div className={styles.profileHeader}>
+    //                         <div className={styles.avatarContainer}>
+    //                         {/* <img 
+    //                             src={avatarPreview || (user?.avatar.startsWith('/') ? `http://localhost:5001${user.avatar}` : '/default-avatar.png')} 
+    //                             alt="Аватар" 
+    //                             className={styles.profileAvatarImg} 
+    //                         /> */}
+    //                          {avatarPreview ? (
+    //                             <img src={avatarPreview} alt="Preview" className={styles.profileAvatarImg} />
+    //                        ) : (
+    //                             <Avatar size="large" />
+    //                        )}
+    //                         <label htmlFor="avatarInput" className={styles.avatarEditButton}>✏️</label>
+    //                         <input id="avatarInput" type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+    //                     </div>                        <div className={styles.profileInfo}>
+    //                         <h2>{user.username}</h2>
+    //                         {avatarFile && (
+    //                     <div className={styles.avatarActions}>
+    //                         <button onClick={handleAvatarUpload} className={`${styles.btn} ${styles.btnPrimary}`}>Save avatar</button>
+    //                         <button onClick={() => { setAvatarFile(null); setAvatarPreview(null); }} className={`${styles.btn} ${styles.btnSecondary}`}>Cancel</button>
+    //                     </div>
+    //                 )}
+    //                         <p><strong>Email:</strong> {user.email}</p>
+    //                         <p><strong>Balance:</strong> <span className={styles.balanceHighlight}>${user.balance.toFixed(2)}</span></p>
+    //                     </div>
+    //                     <div className={styles.card}>
+    //                         <h3>Verification(KYC)</h3>
+    //                         <KYCStatus user={user} onVerifyClick={() => setIsKycModalOpen(true)} />
+    //                     </div>
+    //                 </div>
+    //             </div>
+
+    //             {/* Security Settings */}
+    //             <div className={styles.profileSection}>
+    //                 <h3>Security settings</h3>
+    //                 <h4 style={{ fontWeight: 500, color: '#a1a1aa', marginBottom: '1rem' }}>Change password</h4>
+    //                 <form onSubmit={handlePasswordChange}>
+    //                     <div className={styles.formGrid}>
+    //                         <div className={styles.formGroup}>
+    //                             <label className={styles.formLabel}>Current Password</label>
+    //                             <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={styles.formInput} placeholder="Enter your current password" required />
+    //                         </div>
+    //                         <div className={styles.formGroup}>
+    //                             <label className={styles.formLabel}>New Password</label>
+    //                             <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={styles.formInput} placeholder="Enter new password" required />
+    //                         </div>
+    //                     </div>
+    //                     <button type="submit" className={`${styles.btn} ${styles.btnPrimary}`}>🔒 Change password</button>
+    //                     {passwordMessage.text && <div className={`${styles.alert} ${passwordMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{passwordMessage.text}</p></div>}
+    //                 </form>
+    //             </div>
+
+    //             {/* Balance Management */}
+    //             <div className={styles.profileSection}>
+    //                 <h3>Balance Management (Demo)</h3>
+    //                 <form>
+    //                     <div className={styles.formRow}>
+    //                         <div className={styles.formGroup}>
+    //                             <label className={styles.formLabel}>Amount</label>
+    //                             <input type="number" value={balanceAmount} onChange={(e) => setBalanceAmount(e.target.value)} className={styles.formInput} placeholder="Enter the amount" required />
+    //                         </div>
+    //                         <button onClick={(e) => handleBalanceUpdate(e, 'deposit')} className={`${styles.btn} ${styles.btnSuccess}`}>💰  Top up</button>
+    //                         <button type="button" onClick={(e) => handleBalanceUpdate(e, 'withdraw')} className={`${styles.btn} ${styles.btnSecondary}`}>💸 Withdraw</button>
+    //                     </div>
+    //                     {balanceMessage.text && <div className={`${styles.alert} ${balanceMessage.type === 'error' ? styles.alertError : styles.alertSuccess}`}><p>{balanceMessage.text}</p></div>}
+    //                 </form>
+    //             </div>
+
+    //             {/* Game History */}
+    //             <div className={styles.profileSection}>
+    //                 <h3>History of games</h3>
+    //                 {loadingHistory && <p>Loading...</p>}
+    //                 {historyError && <div className={`${styles.alert} ${styles.alertError}`}>{historyError}</div>}
+    //                 {!loadingHistory && !historyError && (
+    //                     <HistoryTable headers={['Game', 'Result', 'Balance Change', 'Date']}>
+    //                         {gameHistory.map(game => (
+    //                             <tr key={game._id}>
+    //                                 <td>{game.gameName}</td>
+    //                                 <td>
+    //                                     <span className={`${styles.badge} ${game.status === 'WON' ? styles.badgeGreen : game.status === 'LOST' ? styles.badgeRed : styles.badgeYellow}`}>
+    //                                         {statusTranslations[game.status]}
+    //                                     </span>
+    //                                 </td>
+    //                                 <td className={game.amountChanged >= 0 ? styles.amountPositive : styles.amountNegative}>
+    //                                     {game.amountChanged >= 0 ? '+' : ''}${game.amountChanged.toFixed(2)}
+    //                                 </td>
+    //                                 <td>{new Date(game.createdAt).toLocaleString()}</td>
+    //                             </tr>
+    //                         ))}
+    //                     </HistoryTable>
+    //                 )}
+    //             </div>
+
+    //             {/* Transaction History */}
+    //             <div className={styles.profileSection}>
+    //                 <h3>Transaction history</h3>
+    //                 {loadingHistory && <p>Loading...</p>}
+    //                 {historyError && <div className={`${styles.alert} ${styles.alertError}`}>{historyError}</div>}
+    //                 {!loadingHistory && !historyError && (
+    //                      <HistoryTable headers={['Type', 'Status', 'Amount', 'Date']}>
+    //                        {transactionHistory.map(tx => (
+    //                             <tr key={tx._id}>
+    //                                 <td>{typeTranslations[tx.type]}</td>
+    //                                 <td>{tx.status}</td>
+    //                                 <td>${tx.amount.toFixed(2)}</td>
+    //                                 <td>{new Date(tx.createdAt).toLocaleString()}</td>
+    //                             </tr>
+    //                         ))}
+    //                     </HistoryTable>
+    //                 )}
+    //             </div>
+    //         </div>
+    //         <KycModal isOpen={isKycModalOpen} 
+    //             onClose={() => setIsKycModalOpen(false)}
+    //             onSuccess={handleKycSuccess} />
+
+    //     </div>
+    // );
 };
 
 export default ProfilePage;

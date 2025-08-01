@@ -1,7 +1,7 @@
 import React from 'react';
 import { Chessboard } from 'react-chessboard';
 
-// Тип для хода, который мы отправляем на сервер
+// Тип для хода
 type ChessMove = {
     from: string;
     to: string;
@@ -12,7 +12,7 @@ type ChessMove = {
 interface ChessBoardProps {
     gameState: { fen: string };
     onMove: (move: ChessMove) => void;
-    isMyTurn: boolean; // Мы по-прежнему получаем этот флаг, чтобы включать/выключать возможность перетаскивания
+    isMyTurn: boolean;
     isGameFinished: boolean;
     myPlayerIndex: 0 | 1;
 }
@@ -20,15 +20,11 @@ interface ChessBoardProps {
 const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onMove, isMyTurn, isGameFinished, myPlayerIndex }) => {
 
     function onPieceDrop(sourceSquare: string, targetSquare: string, piece: string): boolean {
-        // --- НОВАЯ, МАКСИМАЛЬНО ПРОСТАЯ ЛОГИКА ---
-
-        // 1. Создаем объект хода
         const move: ChessMove = {
             from: sourceSquare,
             to: targetSquare,
         };
 
-        // 2. Проверяем, является ли ход превращением пешки
         if (piece === 'wP' && sourceSquare[1] === '7' && targetSquare[1] === '8') {
             move.promotion = 'q';
         }
@@ -36,24 +32,27 @@ const ChessBoard: React.FC<ChessBoardProps> = ({ gameState, onMove, isMyTurn, is
             move.promotion = 'q';
         }
 
-        // 3. ОТПРАВЛЯЕМ ХОД НА СЕРВЕР В ЛЮБОМ СЛУЧАЕ.
-        // Сервер сам разберется, можно ходить или нет.
         onMove(move);
-
-        // 4. Говорим доске, что ход визуально можно совершить.
-        // Если сервер отклонит ход, он пришлет `gameUpdate` со старым состоянием,
-        // и доска автоматически вернется в правильное положение.
         return true;
     }
 
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Убираем фиксированную ширину и делаем контейнер гибким.
+    // width: '100%' заставит его занимать всю доступную ширину родителя.
+    // maxWidth: '560px' не даст ему стать слишком большим на десктопе.
+    const boardWrapperStyle: React.CSSProperties = {
+        width: '100%',
+        maxWidth: '560px',
+        margin: '20px auto',
+    };
+
     return (
-        <div style={{ width: '560px', margin: '20px auto' }}>
+        <div style={boardWrapperStyle}>
             <Chessboard
-            // @ts-ignore
+                // @ts-ignore
                 position={gameState.fen}
                 onPieceDrop={onPieceDrop}
                 boardOrientation={myPlayerIndex === 0 ? 'white' : 'black'}
-                // Флаг isMyTurn теперь используется только для того, чтобы разрешить или запретить перетаскивание фигур
                 arePiecesDraggable={!isGameFinished && isMyTurn}
             />
         </div>

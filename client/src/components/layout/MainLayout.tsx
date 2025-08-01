@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useUI } from '../../context/UIContext';
+import styles from './MainLayout.module.css';
 
 // Импорты всех страниц
 import DashboardPage from '../../pages/DashboardPage/DashboardPage';
@@ -20,10 +21,10 @@ const MainLayout: React.FC = () => {
     const { isSidebarOpen } = useUI();
     
     return (
-        <div className="min-h-screen text-slate-300" style={{marginLeft: "249px"}}>
+        <div className="min-h-screen text-slate-300">
             <Sidebar />
             
-            <div className={`transition-all duration-300 ease-in-out ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-0'}`}>
+            <div className={`${styles.contentContainer} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
                 <Header />
                 <main className="p-4 sm:p-6 lg:p-8">
                     <Routes>

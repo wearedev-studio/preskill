@@ -23,15 +23,22 @@ const Sidebar: React.FC = () => {
     const getNavLinkClass = ({ isActive }: { isActive: boolean }) => 
         `${styles.navLink} ${isActive ? styles.active : ''}`;
 
+    const handleLinkClick = () => {
+        // Закрываем сайдбар только если экран узкий (мобильная версия)
+        if (window.innerWidth < 1024) {
+             setSidebarOpen(false);
+        }
+    };
+
     return (
         <>
             {isSidebarOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
             )}
 
-            <div className={`${styles.sidebarContainer} ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className={`${styles.sidebarContainer} ${isSidebarOpen ? styles.open : ''}`}>
                 {/* <div className={styles.logoArea}> */}
-                    <Link to="/" className={styles.logoArea}>
+                    <Link to="/" onClick={handleLinkClick} className={styles.logoArea}>
                         <div className={styles.logoIconContainer}><Crown /></div>
                         <div className={styles.logoText}>
                             <h1>Skill Game</h1>
@@ -46,6 +53,7 @@ const Sidebar: React.FC = () => {
                             key={item.path}
                             to={item.path}
                             end={item.path === '/'}
+                            onClick={handleLinkClick}
                             className={getNavLinkClass}
                             // ИСПРАВЛЕНИЕ: Убрали onClick={() => setIsOpen(false)} отсюда
                         >
@@ -56,6 +64,7 @@ const Sidebar: React.FC = () => {
                     {user?.role === 'ADMIN' && (
                          <NavLink
                             to="/admin"
+                            onClick={handleLinkClick}
                             className={getNavLinkClass}
                         >
                             <ShieldCheck />
@@ -72,7 +81,7 @@ const Sidebar: React.FC = () => {
                             <p className={styles.userStatus}>{user?.role === 'ADMIN' ? 'Admin' : 'Gamer'}</p>
                         </div>
                     </div>
-                     <button onClick={logout} className={`${styles.navLink} w-full mt-4`}>
+                     <button onClick={() => { handleLinkClick(); logout(); }}className={`${styles.navLink} w-full mt-4`}>
                         <LogOut />
                         <span>Log out</span>
                     </button>

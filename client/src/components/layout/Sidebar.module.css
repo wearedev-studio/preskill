@@ -1,13 +1,16 @@
 .sidebarContainer {
     position: fixed;
-    inset: 0;
+    inset-y: 0; /* top: 0; bottom: 0; */
     left: 0;
     z-index: 50;
-    width: 16rem; /* 64 in tailwind units */
-    background-color: #1e293b; /* slate-800 */
-    border-right: 1px solid #334155; /* slate-700 */
+    width: 16rem; /* 256px */
+    background-color: #1e293b;
+    border-right: 1px solid #334155;
     display: flex;
     flex-direction: column;
+    height: 100vh;
+    /* Анимация появления/исчезновения */
+    transform: translateX(-100%);
     transition: transform 0.3s ease-in-out;
 }
 
@@ -122,4 +125,23 @@
 .userStatus {
     font-size: 0.75rem;
     color: #64748b; /* slate-500 */
+}
+
+.sidebarContainer.open {
+    transform: translateX(0);
+}
+
+.mobileOverlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+}
+
+/* На больших экранах сайдбар не выезжает, а просто занимает место */
+@media (min-width: 1024px) {
+
+    .mobileOverlay {
+        display: none; /* Затемнение не нужно на десктопе */
+    }
 }
