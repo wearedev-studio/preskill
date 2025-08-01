@@ -27,7 +27,7 @@ export const createAdminRoom = (req: Request, res: Response) => {
     const { gameType, bet } = req.body as { gameType: Room['gameType'], bet: number };
 
     if (!gameType || !bet || !gameLogicsRef[gameType]) {
-        return res.status(400).json({ message: 'Неверный тип игры или ставка.' });
+        return res.status(400).json({ message: 'Incorrect game type or bet.' });
     }
 
     const gameLogic = gameLogicsRef[gameType];
@@ -47,12 +47,12 @@ export const createAdminRoom = (req: Request, res: Response) => {
     const io: Server = req.app.get('io');
     const availableRooms = Object.values(roomsRef)
         .filter(room => room.gameType === gameType && room.players.length < 2)
-        .map(r => ({ id: r.id, bet: r.bet, host: r.players.length > 0 ? r.players[0] : { user: { username: 'Ожидание игрока' } } }));
+        .map(r => ({ id: r.id, bet: r.bet, host: r.players.length > 0 ? r.players[0] : { user: { username: 'Waiting for the player' } } }));
     
     io.to(`lobby-${gameType}`).emit('roomsList', availableRooms);
 
     console.log(`[Admin] Room ${roomId} created.`);
-    res.status(201).json({ message: 'Комната успешно создана', room: newRoom });
+    res.status(201).json({ message: 'The room was created successfully', room: newRoom });
 };
 
 /** [ADMIN] Получить список активных комнат */
@@ -77,7 +77,7 @@ export const deleteRoom = (req: Request, res: Response) => {
     
     if (room) {
         // Оповещаем игроков в комнате, что админ ее закрыл
-        io.to(roomId).emit('error', { message: 'Комната была закрыта администратором.' });
+        io.to(roomId).emit('error', { message: 'The room was closed by the administrator.' });
         
         // Удаляем комнату
         delete roomsRef[roomId];
@@ -86,9 +86,9 @@ export const deleteRoom = (req: Request, res: Response) => {
         const availableRooms = Object.values(roomsRef) /* ... */;
         io.to(`lobby-${room.gameType}`).emit('roomsList', availableRooms);
         
-        res.json({ message: `Комната ${roomId} успешно удалена.` });
+        res.json({ message: `Room ${roomId} successfully deleted.` });
     } else {
-        res.status(404).json({ message: 'Комната не найдена.' });
+        res.status(404).json({ message: 'Room not found.' });
     }
 };
 
@@ -96,7 +96,7 @@ export const createTournament = async (req: Request, res: Response) => {
     const { name, gameType, entryFee, maxPlayers, startTime } = req.body;
 
     if (!name || !gameType || !maxPlayers || !startTime) {
-        return res.status(400).json({ message: 'Пожалуйста, заполните все обязательные поля.' });
+        return res.status(400).json({ message: 'Please fill in all required fields.' });
     }
 
     try {
@@ -111,7 +111,7 @@ export const createTournament = async (req: Request, res: Response) => {
         await tournament.save();
         res.status(201).json(tournament);
     } catch (error: any) {
-        res.status(500).json({ message: 'Ошибка сервера при создании турнира', error: error.message });
+        res.status(500).json({ message: 'Server Error when creating a tournament', error: error.message });
     }
 };
 
@@ -119,10 +119,10 @@ export const createTournament = async (req: Request, res: Response) => {
 export const updateTournament = async (req: Request, res: Response) => {
     try {
         const tournament = await Tournament.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!tournament) return res.status(404).json({ message: 'Турнир не найден' });
+        if (!tournament) return res.status(404).json({ message: 'No tournament found' });
         res.json(tournament);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -130,10 +130,10 @@ export const updateTournament = async (req: Request, res: Response) => {
 export const deleteTournament = async (req: Request, res: Response) => {
     try {
         const tournament = await Tournament.findByIdAndDelete(req.params.id);
-        if (!tournament) return res.status(404).json({ message: 'Турнир не найден' });
-        res.json({ message: 'Турнир удален' });
+        if (!tournament) return res.status(404).json({ message: 'No tournament found' });
+        res.json({ message: 'The tournament has been deleted' });
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -147,9 +147,9 @@ export const startTournamentManually = async (req: Request, res: Response) => {
 
     try {
         await startTournament(id, io);
-        res.json({ message: 'Турнир успешно запущен.' });
+        res.json({ message: 'The tournament has been successfully launched.' });
     } catch (error: any) {
-        res.status(500).json({ message: 'Ошибка при запуске турнира', error: error.message });
+        res.status(500).json({ message: 'Error when starting the tournament', error: error.message });
     }
 };
 
@@ -161,7 +161,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
         const users = await User.find({}).select('-password');
         res.json(users);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -172,11 +172,11 @@ export const getUserById = async (req: Request, res: Response) => {
     try {
         const user = await User.findById(req.params.id).select('-password');
         if (!user) {
-            return res.status(404).json({ message: 'Пользователь не найден' });
+            return res.status(404).json({ message: 'User not found' });
         }
         res.json(user);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -187,7 +187,7 @@ export const updateUser = async (req: Request, res: Response) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) {
-            return res.status(404).json({ message: 'Пользователь не найден' });
+            return res.status(404).json({ message: 'User not found' });
         }
 
         // Обновляем только разрешенные поля
@@ -205,7 +205,7 @@ export const updateUser = async (req: Request, res: Response) => {
             balance: updatedUser.balance
         });
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -216,13 +216,13 @@ export const deleteUser = async (req: Request, res: Response) => {
     try {
         const user = await User.findById(req.params.id);
         if (!user) {
-            return res.status(404).json({ message: 'Пользователь не найден' });
+            return res.status(404).json({ message: 'User not found' });
         }
         
         await user.deleteOne(); // Используем новый метод Mongoose
         res.json({ message: 'Пользователь успешно удален' });
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -232,7 +232,7 @@ export const getAllTransactions = async (req: Request, res: Response) => {
         const transactions = await Transaction.find({}).populate('user', 'username').sort({ createdAt: -1 });
         res.json(transactions);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -242,7 +242,7 @@ export const getAllGameRecords = async (req: Request, res: Response) => {
         const games = await GameRecord.find({}).populate('user', 'username').sort({ createdAt: -1 });
         res.json(games);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -264,7 +264,7 @@ export const getKycSubmissions = async (req: Request, res: Response) => {
         const submissions = await User.find(filter).select('username email kycStatus kycDocuments');
         res.json(submissions);
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -277,32 +277,32 @@ export const reviewKycSubmission = async (req: Request, res: Response) => {
 
     try {
         const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ message: 'Пользователь не найден.' });
+        if (!user) return res.status(404).json({ message: 'User not found.' });
 
         const io: Server = req.app.get('io');
         
         if (action === 'APPROVE') {
             user.kycStatus = 'APPROVED';
             await createNotification(io, userId, {
-                title: '✅ Верификация пройдена',
-                message: 'Ваш аккаунт был успешно верифицирован!'
+                title: '✅ Verification completed',
+                message: 'Your account has been successfully verified!'
             });
         } else if (action === 'REJECT' && reason) {
             user.kycStatus = 'REJECTED';
             user.kycRejectionReason = reason;
              await createNotification(io, userId, {
-                title: '❌ Верификация отклонена',
-                message: `Причина: ${reason}`
+                title: '❌ Verification rejected',
+                message: `Cause: ${reason}`
             });
         } else {
-            return res.status(400).json({ message: 'Неверное действие или отсутствует причина отказа.' });
+            return res.status(400).json({ message: 'Incorrect action or missing reason for refusal.' });
         }
         
         await user.save();
-        res.json({ message: `Заявка пользователя ${user.username} была обработана.` });
+        res.json({ message: `User's request ${user.username} has been processed.` });
 
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -323,11 +323,11 @@ export const getKycDocument = async (req: Request, res: Response) => {
         res.sendFile(filePath, (err) => {
             if (err) {
                 console.error("File send error:", err);
-                res.status(404).json({ message: "Файл не найден на сервере." });
+                res.status(404).json({ message: "The file was not found on the server." });
             }
         });
 
     } catch (error) {
-        res.status(500).json({ message: 'Ошибка сервера' });
+        res.status(500).json({ message: 'Server Error' });
     }
 };
