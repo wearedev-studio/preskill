@@ -19,7 +19,8 @@ export const getUserProfile = (req: Request, res: Response) => {
       balance: req.user.balance,
       avatar: req.user.avatar,
       role: req.user.role,
-      kycStatus: req.user.kycStatus
+      kycStatus: req.user.kycStatus,
+      kycRejectionReason: req.user.kycRejectionReason
     });
   } else {
     // Эта ситуация маловероятна, если `protect` отработал корректно
@@ -186,5 +187,5 @@ export const submitKyc = async (req: Request, res: Response) => {
     user.kycRejectionReason = undefined; // Очищаем причину отказа при новой подаче
     await user.save();
 
-    res.json({ status: user.kycStatus, message: 'Документы успешно отправлены на проверку.' });
+    res.json({ status: user.kycStatus, message: 'The documents have been successfully submitted for verification.' });
 };
