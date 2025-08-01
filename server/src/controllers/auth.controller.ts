@@ -30,7 +30,10 @@ export const registerUser = async (req: Request, res: Response) => {
             username: user.username,
             email: user.email,
             balance: user.balance,
-            avatar: user.avatar
+            avatar: user.avatar,
+            role: user.role,
+            // @ts-ignore
+            token: generateToken(user._id),
         });
     } catch (error: any) {
         res.status(500).json({ message: 'Server error', error: error.message });

@@ -44,7 +44,7 @@ const KycModal: React.FC<KycModalProps> = ({ isOpen, onClose, onSuccess }) => {
                 onClose();
             }, 2000);
         } catch (error: any) {
-            setMessage({ type: 'error', text: error.response?.data?.message || 'Ошибка загрузки' });
+            setMessage({ type: 'error', text: error.response?.data?.message || 'Error loading' });
         } finally {
             setIsLoading(false);
         }

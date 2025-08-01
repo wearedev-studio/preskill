@@ -4,6 +4,8 @@ import axios from 'axios';
 import styles from './RegisterPage.module.css';
 import { Crown, UserPlus } from 'lucide-react';
 import { API_URL } from '../../api/index';
+import { useAuth } from '../../context/AuthContext';
+
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -11,6 +13,8 @@ const RegisterPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const { login } = useAuth(); 
+
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -18,10 +22,18 @@ const RegisterPage: React.FC = () => {
         setError('');
         setIsLoading(true);
         try {
-            await axios.post(`${API_URL}/api/auth/register`, { username, email, password });
-            navigate('/login');
+            // 1. Отправляем запрос на регистрацию
+            const { data } = await axios.post(`${API_URL}/api/auth/register`, { username, email, password });
+            
+            // 2. ИСПОЛЬЗУЕМ ПОЛУЧЕННЫЕ ДАННЫЕ ДЛЯ АВТОМАТИЧЕСКОГО ВХОДА
+            const { token, ...user } = data;
+            login({ token, user });
+
+            // 3. Перенаправляем на главную страницу
+            navigate('/');
+
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Registration error.');
+            setError(err.response?.data?.message || 'Error register.');
         } finally {
             setIsLoading(false);
         }

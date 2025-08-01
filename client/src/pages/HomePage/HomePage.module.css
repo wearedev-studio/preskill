@@ -80,6 +80,7 @@
 .cardImage {
     height: 120px;
     background-color: #3b82f6; /* blue-500 */
+    object-fit: cover;
 }
 
 .cardAvatar {
