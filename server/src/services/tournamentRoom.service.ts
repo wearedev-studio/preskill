@@ -857,6 +857,19 @@ async function accelerateSingleBotMatch(io: Server, room: any, tournament: any):
         await advanceWinnerInTournament(io, tournament._id.toString(), room.matchId, winner);
 
         console.log(`[TournamentRoom] Accelerated bot match ${room.matchId} finished, winner: ${winner.username}`);
+        
+        // КРИТИЧЕСКИ ВАЖНО: После ускорения матча перепроверяем турнир
+        setTimeout(async () => {
+            try {
+                const updatedTournament = await Tournament.findById(tournament._id);
+                if (updatedTournament) {
+                    console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after accelerated match`);
+                    await checkAndCreateNextRound(io, updatedTournament);
+                }
+            } catch (error) {
+                console.error(`[TournamentRoom] Error in recheck after accelerated match:`, error);
+            }
+        }, 1000); // Небольшая задержка для завершения всех операций
     } catch (error) {
         console.error(`[TournamentRoom] Error accelerating single bot match:`, error);
     }
