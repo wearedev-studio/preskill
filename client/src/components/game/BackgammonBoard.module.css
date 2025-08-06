@@ -1,0 +1,535 @@
+.backgammonBoard {
+    width: 100%;
+    max-width: 100vw;
+    margin: 10px auto;
+    font-family: Arial, sans-serif;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.gameInfo {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.playerInfo {
+    text-align: center;
+    color: #e2e8f0;
+    flex: 1;
+    min-width: 120px;
+}
+
+.playerName {
+    font-size: clamp(12px, 2.5vw, 16px);
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.playerColor {
+    font-size: clamp(10px, 2vw, 14px);
+    opacity: 0.8;
+}
+
+.diceSection {
+    text-align: center;
+    flex: 1;
+    min-width: 150px;
+}
+
+.rollButton {
+    padding: clamp(8px, 2vw, 12px) clamp(16px, 4vw, 24px);
+    font-size: clamp(12px, 2.5vw, 16px);
+    font-weight: bold;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 200px;
+}
+
+.rollButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.rollButton:disabled {
+    background: #4a5568;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.diceContainer {
+    display: flex;
+    gap: clamp(5px, 1vw, 10px);
+    justify-content: center;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.die {
+    width: clamp(30px, 6vw, 50px);
+    height: clamp(30px, 6vw, 50px);
+    background: white;
+    border: 2px solid #2d3748;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(14px, 3vw, 24px);
+    font-weight: bold;
+    color: #2d3748;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.usedDie {
+    opacity: 0.4;
+    background: #e2e8f0;
+}
+
+.boardContainer {
+    background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+    border: 6px solid #654321;
+    border-radius: 16px;
+    padding: clamp(15px, 3vw, 25px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: visible;
+    min-height: 400px;
+    margin: 0 auto;
+    max-width: 900px;
+}
+
+.boardGrid {
+    display: flex;
+    flex-direction: column;
+    height: clamp(350px, 60vh, 500px);
+    background: #d2b48c;
+    border: 3px solid #8b7355;
+    border-radius: 8px;
+    position: relative;
+}
+
+.topSection {
+    height: 45%;
+    display: flex;
+    position: relative;
+    border-bottom: 2px solid #8b7355;
+}
+
+.bottomSection {
+    height: 45%;
+    display: flex;
+    position: relative;
+    border-top: 2px solid #8b7355;
+}
+
+.middleBar {
+    height: 10%;
+    background: #654321;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 2px solid #8b7355;
+    border-bottom: 2px solid #8b7355;
+    position: relative;
+}
+
+.leftQuadrant {
+    width: 48%;
+    display: flex;
+    border-right: 3px solid #654321;
+}
+
+.rightQuadrant {
+    width: 48%;
+    display: flex;
+    border-left: 3px solid #654321;
+}
+
+.point {
+    flex: 1;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.point:hover {
+    transform: scale(1.02);
+}
+
+.pointTriangle {
+    width: 0;
+    height: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.topTriangle {
+    border-left: clamp(12px, 2.5vw, 20px) solid transparent;
+    border-right: clamp(12px, 2.5vw, 20px) solid transparent;
+    border-top: clamp(80px, 15vh, 120px) solid #8b7355;
+    margin-bottom: auto;
+}
+
+.bottomTriangle {
+    border-left: clamp(12px, 2.5vw, 20px) solid transparent;
+    border-right: clamp(12px, 2.5vw, 20px) solid transparent;
+    border-bottom: clamp(80px, 15vh, 120px) solid #8b7355;
+    margin-top: auto;
+}
+
+.lightPoint .topTriangle {
+    border-top-color: #deb887;
+}
+
+.lightPoint .bottomTriangle {
+    border-bottom-color: #deb887;
+}
+
+.darkPoint .topTriangle {
+    border-top-color: #8b7355;
+}
+
+.darkPoint .bottomTriangle {
+    border-bottom-color: #8b7355;
+}
+
+.selectedPoint .topTriangle {
+    border-top-color: #ffd700 !important;
+    filter: brightness(1.2);
+}
+
+.selectedPoint .bottomTriangle {
+    border-bottom-color: #ffd700 !important;
+    filter: brightness(1.2);
+}
+
+.possibleMove .topTriangle {
+    border-top-color: #32cd32 !important;
+    filter: brightness(1.2);
+}
+
+.possibleMove .bottomTriangle {
+    border-bottom-color: #32cd32 !important;
+    filter: brightness(1.2);
+}
+
+.piecesContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.topPiecesContainer {
+    justify-content: flex-start;
+    padding-top: clamp(5px, 1vh, 8px);
+}
+
+.bottomPiecesContainer {
+    justify-content: flex-end;
+    padding-bottom: clamp(5px, 1vh, 8px);
+    flex-direction: column-reverse;
+}
+
+.piece {
+    width: clamp(22px, 4.5vw, 32px);
+    height: clamp(22px, 4.5vw, 32px);
+    border-radius: 50%;
+    border: clamp(2px, 0.4vw, 3px) solid #2d3748;
+    margin: clamp(1px, 0.2vh, 2px) 0;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+    pointer-events: auto;
+    cursor: pointer;
+    position: relative;
+    z-index: 15;
+}
+
+.piece:hover {
+    transform: scale(1.15);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    z-index: 20;
+}
+
+.whitePiece {
+    background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f0f0f0 50%, #e0e0e0 100%);
+    border-color: #4a5568;
+}
+
+.blackPiece {
+    background: radial-gradient(circle at 30% 30%, #4a5568 0%, #2d3748 50%, #1a202c 100%);
+    border-color: #e2e8f0;
+}
+
+.pieceCount {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    border-radius: 50%;
+    width: clamp(14px, 2.8vw, 20px);
+    height: clamp(14px, 2.8vw, 20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(8px, 1.6vw, 11px);
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 25;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.bar {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: clamp(40px, 8vw, 60px);
+    height: 80%;
+    background: linear-gradient(135deg, #654321 0%, #4a3728 100%);
+    border: 3px solid #8b7355;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(3px, 0.6vh, 5px);
+    padding: clamp(8px, 1.5vh, 12px) clamp(5px, 1vw, 8px);
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.barPieces {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2px, 0.4vh, 3px);
+    align-items: center;
+    max-height: 100%;
+    overflow: visible;
+}
+
+.bearOffZone {
+    position: absolute;
+    right: clamp(-70px, -10vw, -90px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: clamp(50px, 8vw, 70px);
+    height: 85%;
+    background: linear-gradient(135deg, rgba(139, 69, 19, 0.1) 0%, rgba(160, 82, 45, 0.1) 100%);
+    border: 3px dashed #654321;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+    padding: clamp(8px, 1.5vh, 12px);
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+}
+
+.bearOffLabel {
+    color: #654321;
+    font-size: clamp(8px, 1.4vw, 11px);
+    font-weight: bold;
+    text-align: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+.bearOffPieces {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2px, 0.4vh, 3px);
+    align-items: center;
+    max-height: 60%;
+    overflow: visible;
+}
+
+.gameStatus {
+    margin-top: clamp(15px, 3vh, 25px);
+    text-align: center;
+    font-size: clamp(12px, 2.5vw, 16px);
+    font-weight: bold;
+    padding: clamp(10px, 2vh, 15px);
+    border-radius: 12px;
+    border: 2px solid transparent;
+}
+
+.myTurn {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+    color: #10b981;
+    border-color: #10b981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.opponentTurn {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
+    color: #f59e0b;
+    border-color: #f59e0b;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.gameFinished {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
+    color: #ef4444;
+    border-color: #ef4444;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.moveHistory {
+    margin-top: clamp(15px, 3vh, 20px);
+    padding: clamp(10px, 2vh, 15px);
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.2) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    max-height: clamp(80px, 15vh, 120px);
+    overflow-y: auto;
+    font-size: clamp(10px, 2vw, 12px);
+    color: #e2e8f0;
+    backdrop-filter: blur(4px);
+}
+
+.pointNumbers {
+    position: absolute;
+    top: clamp(-25px, -4vh, -30px);
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 clamp(15px, 3vw, 25px);
+    font-size: clamp(9px, 1.8vw, 12px);
+    color: #654321;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.pointNumber {
+    flex: 1;
+    text-align: center;
+}
+
+/* Медиа-запросы для улучшенной адаптивности */
+@media (max-width: 768px) {
+    .backgammonBoard {
+        padding: 0 5px;
+    }
+    
+    .gameInfo {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .playerInfo, .diceSection {
+        min-width: auto;
+    }
+    
+    .boardContainer {
+        padding: 15px;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    .bearOffZone {
+        right: -60px;
+        width: 45px;
+    }
+    
+    .bar {
+        width: 35px;
+    }
+}
+
+@media (max-width: 480px) {
+    .boardGrid {
+        height: 280px;
+    }
+    
+    .bearOffZone {
+        right: -50px;
+        width: 40px;
+        height: 80%;
+    }
+    
+    .bar {
+        width: 30px;
+    }
+    
+    .piece {
+        width: 18px;
+        height: 18px;
+        border-width: 1px;
+    }
+    
+    .pieceCount {
+        width: 12px;
+        height: 12px;
+        font-size: 7px;
+    }
+    
+    .topTriangle, .bottomTriangle {
+        border-left-width: 10px;
+        border-right-width: 10px;
+    }
+    
+    .topTriangle {
+        border-top-width: 60px;
+    }
+    
+    .bottomTriangle {
+        border-bottom-width: 60px;
+    }
+}
+
+@media (max-width: 360px) {
+    .boardContainer {
+        padding: 10px;
+    }
+    
+    .boardGrid {
+        height: 240px;
+    }
+    
+    .piece {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .topTriangle {
+        border-top-width: 50px;
+        border-left-width: 8px;
+        border-right-width: 8px;
+    }
+    
+    .bottomTriangle {
+        border-bottom-width: 50px;
+        border-left-width: 8px;
+        border-right-width: 8px;
+    }
+}

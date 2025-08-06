@@ -1,17 +1,38 @@
+import React, { useState, useCallback, useMemo } from 'react';
+import styles from './BackgammonBoard.module.css';
 
-import React, { useState, useMemo } from 'react';
+// Типы для нард
+type PlayerColor = 'white' | 'black';
 
-// === Типы (остаются без изменений) ===
-type Point = [playerIndex: 0 | 1, count: number] | null;
-type BackgammonGameState = {
-    points: Point[];
-    dice: number[];
+interface BackgammonPiece {
+    color: PlayerColor;
+}
+
+interface Point {
+    pieces: BackgammonPiece[];
+}
+
+interface DiceRoll {
+    dice: [number, number];
+    availableMoves: number[];
+}
+
+interface BackgammonGameState {
+    board: Point[];
+    bar: { white: BackgammonPiece[]; black: BackgammonPiece[] };
+    home: { white: BackgammonPiece[]; black: BackgammonPiece[] };
+    currentPlayer: PlayerColor;
+    diceRoll: DiceRoll | null;
+    moveHistory: any[];
     turnPhase: 'ROLLING' | 'MOVING';
-    borneOff: [number, number];
-};
-type BackgammonMove = { from: number; to: number };
+}
 
-// === Пропсы компонента (остаются без изменений) ===
+interface BackgammonMove {
+    from: number;
+    to: number;
+    dieValue: number;
+}
+
 interface BackgammonBoardProps {
     gameState: BackgammonGameState;
     onMove: (move: BackgammonMove) => void;
@@ -21,142 +42,403 @@ interface BackgammonBoardProps {
     myPlayerIndex: 0 | 1;
 }
 
-// === Логика для подсветки ходов ===
-function getPossibleMovesForPoint(from: number, gameState: BackgammonGameState, playerIndex: 0 | 1): number[] {
-    const { points, dice } = gameState;
-    const moveDirection = playerIndex === 0 ? -1 : 1;
-    const barIndex = playerIndex === 0 ? 25 : 0;
-    const possibleTos: number[] = [];
-
-    if ((points[barIndex]?.[1] ?? 0) > 0) {
-        if (from !== barIndex) return [];
-        for (const die of dice) {
-            const to = playerIndex === 0 ? 25 - die : die;
-            const targetPoint = points[to];
-            if (!targetPoint || targetPoint[0] === playerIndex || targetPoint[1] <= 1) {
-                possibleTos.push(to);
-            }
-        }
-        return possibleTos;
-    }
-
-    for (const die of dice) {
-        const to = from + (die * moveDirection);
-        if (to < 1 || to > 24) {
-             possibleTos.push(playerIndex === 0 ? 0 : 25);
-        } else {
-            const targetPoint = points[to];
-            if (!targetPoint || targetPoint[0] === playerIndex || targetPoint[1] <= 1) {
-                possibleTos.push(to);
-            }
-        }
-    }
-    return possibleTos;
-}
-
-
-const BackgammonBoard: React.FC<BackgammonBoardProps> = ({ gameState, onMove, onRollDice, isMyTurn, isGameFinished, myPlayerIndex }) => {
+const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
+    gameState,
+    onMove,
+    onRollDice,
+    isMyTurn,
+    isGameFinished,
+    myPlayerIndex
+}) => {
     const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+    const [possibleMoves, setPossibleMoves] = useState<number[]>([]);
 
-    // Вычисляем возможные ходы для подсветки
-    const possibleMoves = useMemo(() => {
-        if (selectedPoint === null || !isMyTurn) return new Set<number>();
-        const moves = getPossibleMovesForPoint(selectedPoint, gameState, myPlayerIndex);
-        return new Set(moves);
-    }, [selectedPoint, gameState, isMyTurn, myPlayerIndex]);
+    console.log('[BackgammonBoard] Render:', {
+        isMyTurn,
+        isGameFinished,
+        myPlayerIndex,
+        currentPlayer: gameState.currentPlayer,
+        turnPhase: gameState.turnPhase,
+        diceRoll: gameState.diceRoll
+    });
 
-    const handlePointClick = (index: number) => {
-        if (!isMyTurn || isGameFinished || gameState.turnPhase !== 'MOVING') return;
+    // Определяем цвет игрока
+    const myColor: PlayerColor = myPlayerIndex === 0 ? 'white' : 'black';
 
-        if (selectedPoint !== null) {
-            if (possibleMoves.has(index) || (index === 0 && possibleMoves.has(0)) || (index === 25 && possibleMoves.has(25))) {
-                onMove({ from: selectedPoint, to: index });
-            }
-            setSelectedPoint(null);
-        } else {
-            const barIndex = myPlayerIndex === 0 ? 25 : 0;
-            const point = gameState.points[index];
+    // Получаем возможные ходы для выбранной точки
+    const getPossibleMovesForPoint = useCallback((from: number): number[] => {
+        if (!gameState.diceRoll || !isMyTurn || gameState.turnPhase !== 'MOVING') {
+            return [];
+        }
+
+        const moves: number[] = [];
+        const direction = myColor === 'white' ? 1 : -1;
+
+        // Ходы с бара
+        if (from === -1) {
+            if (gameState.bar[myColor].length === 0) return [];
             
-            // ИСПРАВЛЕНИЕ: Добавлены скобки вокруг (point?.[1] ?? 0)
-            if (index === barIndex && (point?.[1] ?? 0) > 0) {
-                setSelectedPoint(index);
-            } else if (point && point[0] === myPlayerIndex) {
-                setSelectedPoint(index);
+            for (const dieValue of gameState.diceRoll.availableMoves) {
+                const to = myColor === 'white' ? dieValue - 1 : 24 - dieValue;
+                if (canPlacePieceOnPoint(to)) {
+                    moves.push(to);
+                }
+            }
+            return moves;
+        }
+
+        // Обычные ходы
+        if (from < 0 || from >= 24) return [];
+        if (gameState.board[from].pieces.length === 0) return [];
+        if (gameState.board[from].pieces[gameState.board[from].pieces.length - 1].color !== myColor) return [];
+
+        // Если есть фигуры на баре, можно ходить только с бара
+        if (gameState.bar[myColor].length > 0) return [];
+
+        for (const dieValue of gameState.diceRoll.availableMoves) {
+            const to = from + (dieValue * direction);
+
+            // Обычный ход
+            if (to >= 0 && to < 24 && canPlacePieceOnPoint(to)) {
+                moves.push(to);
+            }
+
+            // Вывод из дома
+            if (areAllPiecesInHome() && 
+                ((myColor === 'white' && to >= 24) || (myColor === 'black' && to < 0))) {
+                moves.push(-2); // -2 означает вывод в дом
             }
         }
-    };
 
-    const renderPoints = (indices: number[], reverseColumn: boolean = false) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {indices.map(i => (
-                <div key={i} onClick={() => handlePointClick(i)} style={{ 
-                    height: '50%', display: 'flex',
-                    flexDirection: reverseColumn ? 'column-reverse' : 'column',
-                    alignItems: 'center',
-                    backgroundColor: possibleMoves.has(i) ? '#00bfa5' : 'transparent', // Подсветка
-                    cursor: 'pointer',
-                }}>
-                    {/* Визуализация треугольников */}
-                    <div style={{
-                        width: 0, height: 0,
-                        borderLeft: '25px solid transparent',
-                        borderRight: '25px solid transparent',
-                        ...(reverseColumn 
-                            ? { borderTop: `180px solid ${i % 2 === 0 ? '#c5a17e' : '#a17a57'}` }
-                            : { borderBottom: `180px solid ${i % 2 === 0 ? '#c5a17e' : '#a17a57'}` })
-                    }}/>
-                     {/* Шашки на треугольнике */}
-                     <div style={{ position: 'absolute', display: 'flex', flexDirection: reverseColumn ? 'column-reverse' : 'column', height: '180px' }}>
-                        {gameState.points[i] && Array.from({ length: gameState.points[i]![1] }).map((_, j) => (
-                           <div key={j} style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: gameState.points[i]![0] === 0 ? '#6f4e37' : '#f0d9b5', margin: '1px', border: '2px solid #3a2e21' }}/>
-                        ))}
+        return moves;
+    }, [gameState, isMyTurn, myColor]);
+
+    // Проверка, можно ли поставить фигуру на точку
+    const canPlacePieceOnPoint = useCallback((pointIndex: number): boolean => {
+        if (pointIndex < 0 || pointIndex >= 24) return false;
+        
+        const point = gameState.board[pointIndex];
+        if (point.pieces.length === 0) return true;
+        if (point.pieces[0].color === myColor) return true;
+        if (point.pieces.length === 1) return true; // можно бить одиночную фигуру
+        
+        return false; // нельзя ходить на точку с 2+ фигурами противника
+    }, [gameState.board, myColor]);
+
+    // Проверка, все ли фигуры в доме
+    const areAllPiecesInHome = useCallback((): boolean => {
+        const homeRange = myColor === 'white' ? [18, 19, 20, 21, 22, 23] : [0, 1, 2, 3, 4, 5];
+        
+        // Проверяем, что на баре нет фигур
+        if (gameState.bar[myColor].length > 0) return false;
+
+        // Проверяем, что все фигуры в доме или уже выведены
+        let piecesOnBoard = 0;
+        for (let i = 0; i < 24; i++) {
+            const piecesOfColor = gameState.board[i].pieces.filter(p => p.color === myColor).length;
+            if (piecesOfColor > 0) {
+                if (!homeRange.includes(i)) return false;
+                piecesOnBoard += piecesOfColor;
+            }
+        }
+
+        return piecesOnBoard + gameState.home[myColor].length === 15;
+    }, [gameState, myColor]);
+
+    // Обработка клика по точке
+    const handlePointClick = useCallback((pointIndex: number) => {
+        console.log('[BackgammonBoard] Point clicked:', pointIndex);
+        
+        if (!isMyTurn || isGameFinished || gameState.turnPhase !== 'MOVING') {
+            console.log('[BackgammonBoard] Click ignored - not my turn or wrong phase');
+            return;
+        }
+
+        // Если уже выбрана точка, пытаемся сделать ход
+        if (selectedPoint !== null) {
+            console.log('[BackgammonBoard] Attempting move from', selectedPoint, 'to', pointIndex);
+            
+            // Если кликнули на ту же точку, снимаем выделение
+            if (selectedPoint === pointIndex) {
+                console.log('[BackgammonBoard] Deselecting point');
+                setSelectedPoint(null);
+                setPossibleMoves([]);
+                return;
+            }
+
+            // Проверяем, является ли ход возможным
+            const isValidMove = possibleMoves.includes(pointIndex);
+
+            if (isValidMove && gameState.diceRoll) {
+                // Находим подходящую кость
+                const direction = myColor === 'white' ? 1 : -1;
+                let dieValue = 0;
+
+                if (selectedPoint === -1) {
+                    // Ход с бара
+                    dieValue = myColor === 'white' ? pointIndex + 1 : 24 - pointIndex;
+                } else if (pointIndex === -2) {
+                    // Вывод из дома
+                    const distance = myColor === 'white' ? 24 - selectedPoint : selectedPoint + 1;
+                    dieValue = gameState.diceRoll.availableMoves.find(die => die >= distance) || 0;
+                } else {
+                    // Обычный ход
+                    dieValue = (pointIndex - selectedPoint) * direction;
+                }
+
+                if (gameState.diceRoll.availableMoves.includes(dieValue)) {
+                    const move: BackgammonMove = {
+                        from: selectedPoint,
+                        to: pointIndex,
+                        dieValue
+                    };
+
+                    console.log('[BackgammonBoard] Sending move:', move);
+                    onMove(move);
+                    setSelectedPoint(null);
+                    setPossibleMoves([]);
+                } else {
+                    console.log('[BackgammonBoard] Invalid die value:', dieValue);
+                }
+            } else {
+                // Пытаемся выбрать новую точку
+                selectPoint(pointIndex);
+            }
+            return;
+        }
+
+        // Выбираем точку для хода
+        selectPoint(pointIndex);
+    }, [isMyTurn, isGameFinished, selectedPoint, possibleMoves, gameState, myColor, onMove]);
+
+    const selectPoint = useCallback((pointIndex: number) => {
+        // Ход с бара
+        if (pointIndex === -1) {
+            if (gameState.bar[myColor].length === 0) return;
+            console.log('[BackgammonBoard] Selecting bar');
+            setSelectedPoint(-1);
+            const moves = getPossibleMovesForPoint(-1);
+            setPossibleMoves(moves);
+            return;
+        }
+
+        // Обычная точка
+        if (pointIndex < 0 || pointIndex >= 24) return;
+        const point = gameState.board[pointIndex];
+        if (point.pieces.length === 0) return;
+        if (point.pieces[point.pieces.length - 1].color !== myColor) return;
+
+        console.log('[BackgammonBoard] Selecting point', pointIndex);
+        setSelectedPoint(pointIndex);
+        const moves = getPossibleMovesForPoint(pointIndex);
+        setPossibleMoves(moves);
+    }, [gameState, myColor, getPossibleMovesForPoint]);
+
+    // Обработка клика по зоне вывода
+    const handleBearOffClick = useCallback(() => {
+        if (selectedPoint !== null && possibleMoves.includes(-2)) {
+            handlePointClick(-2);
+        }
+    }, [selectedPoint, possibleMoves, handlePointClick]);
+
+    // Рендер фигуры
+    const renderPiece = useCallback((piece: BackgammonPiece, index: number) => {
+        const pieceClass = `${styles.piece} ${piece.color === 'white' ? styles.whitePiece : styles.blackPiece}`;
+        
+        return (
+            <div key={index} className={pieceClass} />
+        );
+    }, []);
+
+    // Рендер точки
+    const renderPoint = useCallback((pointIndex: number, isTop: boolean) => {
+        const point = gameState.board[pointIndex];
+        const isSelected = selectedPoint === pointIndex;
+        const isPossibleMove = possibleMoves.includes(pointIndex);
+        const isDark = pointIndex % 2 === 1;
+
+        let pointClass = `${styles.point}`;
+        if (isDark) pointClass += ` ${styles.darkPoint}`;
+        else pointClass += ` ${styles.lightPoint}`;
+        if (isSelected) pointClass += ` ${styles.selectedPoint}`;
+        if (isPossibleMove) pointClass += ` ${styles.possibleMove}`;
+
+        const triangleClass = `${styles.pointTriangle} ${isTop ? styles.topTriangle : styles.bottomTriangle}`;
+        const piecesClass = `${styles.piecesContainer} ${isTop ? styles.topPiecesContainer : styles.bottomPiecesContainer}`;
+
+        return (
+            <div
+                key={pointIndex}
+                className={pointClass}
+                onClick={() => handlePointClick(pointIndex)}
+            >
+                <div className={triangleClass} />
+                <div className={piecesClass}>
+                    {point.pieces.slice(0, 5).map((piece, index) => renderPiece(piece, index))}
+                    {point.pieces.length > 5 && (
+                        <div className={styles.pieceCount}>
+                            {point.pieces.length}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }, [gameState.board, selectedPoint, possibleMoves, handlePointClick, renderPiece]);
+
+    // Рендер костей
+    const renderDice = useCallback(() => {
+        if (!gameState.diceRoll) return null;
+
+        return (
+            <div className={styles.diceContainer}>
+                {gameState.diceRoll.dice.map((die, index) => (
+                    <div key={index} className={styles.die}>
+                        {die}
+                    </div>
+                ))}
+                {gameState.diceRoll.availableMoves.map((move, index) => (
+                    <div key={`move-${index}`} className={`${styles.die} ${styles.usedDie}`}>
+                        {move}
+                    </div>
+                ))}
+            </div>
+        );
+    }, [gameState.diceRoll]);
+
+    return (
+        <div className={styles.backgammonBoard}>
+            {/* Информация об игре */}
+            <div className={styles.gameInfo}>
+                <div className={styles.playerInfo}>
+                    <div className={styles.playerName}>
+                        {myPlayerIndex === 0 ? 'Вы' : 'Противник'}
+                    </div>
+                    <div className={styles.playerColor}>
+                        Белые (ходят первыми)
                     </div>
                 </div>
-            ))}
-        </div>
-    );
-    
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'sans-serif' }}>
-            {/* Панель управления */}
-            <div style={{ margin: '20px', display: 'flex', gap: '20px', alignItems: 'center' }}>
-                {isMyTurn && gameState.turnPhase === 'ROLLING' && !isGameFinished && (
-                    <button onClick={onRollDice} style={{ padding: '10px 20px', fontSize: '1rem' }}>Бросить кости</button>
-                )}
-                {gameState.dice.length > 0 && (
-                    <div>
-                        <strong>Ваши кости:</strong>
-                        <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
-                            {gameState.dice.map((die, i) => (
-                                <div key={i} style={{ width: '40px', height: '40px', border: '1px solid white', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.5rem' }}>{die}</div>
-                            ))}
+
+                <div className={styles.diceSection}>
+                    {isMyTurn && gameState.turnPhase === 'ROLLING' && !isGameFinished && (
+                        <button 
+                            onClick={onRollDice} 
+                            className={styles.rollButton}
+                        >
+                            Бросить кости
+                        </button>
+                    )}
+                    {renderDice()}
+                </div>
+
+                <div className={styles.playerInfo}>
+                    <div className={styles.playerName}>
+                        {myPlayerIndex === 1 ? 'Вы' : 'Противник'}
+                    </div>
+                    <div className={styles.playerColor}>
+                        Черные
+                    </div>
+                </div>
+            </div>
+
+            {/* Игровая доска */}
+            <div className={styles.boardContainer}>
+                {/* Номера точек */}
+                <div className={styles.pointNumbers}>
+                    {Array.from({ length: 24 }, (_, i) => {
+                        const pointNum = i < 12 ? 12 - i : i + 1;
+                        return (
+                            <div key={i} className={styles.pointNumber}>
+                                {pointNum}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className={styles.boardGrid}>
+                    {/* Верхняя секция */}
+                    <div className={styles.topSection}>
+                        {/* Левый квадрант (точки 12-7) */}
+                        <div className={styles.leftQuadrant}>
+                            {Array.from({ length: 6 }, (_, i) => renderPoint(12 - i - 1, true))}
+                        </div>
+                        
+                        {/* Правый квадрант (точки 6-1) */}
+                        <div className={styles.rightQuadrant}>
+                            {Array.from({ length: 6 }, (_, i) => renderPoint(6 - i - 1, true))}
                         </div>
                     </div>
+
+                    {/* Средняя полоса с баром */}
+                    <div className={styles.middleBar}>
+                        <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: 'clamp(10px, 2vw, 14px)' }}>
+                            БАР
+                        </span>
+                    </div>
+
+                    {/* Нижняя секция */}
+                    <div className={styles.bottomSection}>
+                        {/* Левый квадрант (точки 13-18) */}
+                        <div className={styles.leftQuadrant}>
+                            {Array.from({ length: 6 }, (_, i) => renderPoint(12 + i, false))}
+                        </div>
+                        
+                        {/* Правый квадрант (точки 19-24) */}
+                        <div className={styles.rightQuadrant}>
+                            {Array.from({ length: 6 }, (_, i) => renderPoint(18 + i, false))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Бар */}
+                <div
+                    className={styles.bar}
+                    onClick={() => handlePointClick(-1)}
+                >
+                    <div className={styles.barPieces}>
+                        {gameState.bar.white.map((piece, index) => renderPiece(piece, index))}
+                    </div>
+                    <div className={styles.barPieces}>
+                        {gameState.bar.black.map((piece, index) => renderPiece(piece, index))}
+                    </div>
+                </div>
+
+                {/* Зона вывода фигур */}
+                <div
+                    className={styles.bearOffZone}
+                    onClick={handleBearOffClick}
+                >
+                    <div className={styles.bearOffLabel}>ВЫВОД</div>
+                    <div className={styles.bearOffPieces}>
+                        {gameState.home.white.map((piece, index) => renderPiece(piece, index))}
+                    </div>
+                    <div className={styles.bearOffPieces}>
+                        {gameState.home.black.map((piece, index) => renderPiece(piece, index))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Статус игры */}
+            <div className={`${styles.gameStatus} ${
+                isGameFinished ? styles.gameFinished : 
+                isMyTurn ? styles.myTurn : styles.opponentTurn
+            }`}>
+                {isGameFinished ? (
+                    <span>Игра завершена</span>
+                ) : isMyTurn ? (
+                    gameState.turnPhase === 'ROLLING' ? 
+                        <span>🎲 Ваш ход - бросьте кости</span> :
+                        <span>🟢 Ваш ход - делайте ходы</span>
+                ) : (
+                    <span>🟡 Ход противника</span>
                 )}
             </div>
-            
-            {/* Игровая доска */}
-            <div style={{ display: 'flex', backgroundColor: '#8B4513', padding: '15px', border: '5px solid #3a2e21' }}>
-                {renderPoints([12, 11, 10, 9, 8, 7], false)}
-                <div style={{ width: '15px' }} />
-                {renderPoints([6, 5, 4, 3, 2, 1], false)}
-                
-                {/* Бар */}
-                <div style={{ width: '60px', backgroundColor: '#5a3a22', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '5px' }}>
-                     {/* Шашки игрока 1 (белые) на баре */}
-                     {gameState.points[0] && Array.from({ length: gameState.points[0]![1] }).map((_, j) => (
-                        <div key={j} style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#f0d9b5', border: '2px solid #3a2e21' }}/>
-                    ))}
-                     {/* Шашки игрока 0 (черные) на баре */}
-                     {gameState.points[25] && Array.from({ length: gameState.points[25]![1] }).map((_, j) => (
-                        <div key={j} style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#6f4e37', border: '2px solid #3a2e21' }}/>
-                    ))}
+
+            {/* История ходов */}
+            {gameState.moveHistory && gameState.moveHistory.length > 0 && (
+                <div className={styles.moveHistory}>
+                    <strong>История ходов:</strong> {gameState.moveHistory.length} ходов
                 </div>
-                
-                {renderPoints([13, 14, 15, 16, 17, 18], true)}
-                <div style={{ width: '15px' }} />
-                {renderPoints([19, 20, 21, 22, 23, 24], true)}
-            </div>
+            )}
         </div>
     );
 };

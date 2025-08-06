@@ -8,7 +8,6 @@ interface TournamentCreationData {
     gameType: string;
     entryFee: number;
     maxPlayers: number;
-    startTime: string;
 }
 
 /**

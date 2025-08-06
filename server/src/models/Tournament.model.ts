@@ -1,21 +1,29 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
+// Интерфейс для игрока (может быть реальным пользователем или ботом)
+export interface ITournamentPlayer {
+    _id: string;
+    username: string;
+    isBot?: boolean;
+}
+
 // Интерфейс для одного матча в сетке
-interface IMatch {
+export interface IMatch {
     matchId: number;
-    players: (Types.ObjectId | { isBot: boolean; username: string; _id: string })[];
-    winner?: Types.ObjectId | { isBot: boolean; username: string; _id: string };
+    players: ITournamentPlayer[];
+    winner?: ITournamentPlayer;
     roomId?: string; // ID временной игровой комнаты
 }
 
 // Интерфейс для раунда
-interface IRound {
+export interface IRound {
     roundName: string; // e.g., 'Quarter-finals'
     matches: IMatch[];
 }
 
 // Интерфейс для документа турнира
 export interface ITournament extends Document {
+    _id: Types.ObjectId;
     gameType: 'tic-tac-toe' | 'checkers' | 'chess' | 'backgammon';
     name: string;
     status: 'REGISTERING' | 'ACTIVE' | 'FINISHED' | 'CANCELLED';
@@ -23,15 +31,14 @@ export interface ITournament extends Document {
     prizePool: number;
     maxPlayers: number;
     players: Types.ObjectId[];
-    startTime: Date;
     bracket: IRound[];
 }
 
 const matchSchema = new Schema({
     matchId: { type: Number, required: true },
     players: { type: Array, default: [] },
-    winner: { type: Object },
-    roomId: { type: String },
+    winner: { type: Object, default: undefined },
+    roomId: { type: String, default: undefined },
 }, { _id: false });
 
 const roundSchema = new Schema({
@@ -61,7 +68,6 @@ const tournamentSchema = new Schema<ITournament>({
         default: 8,
     },
     players: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    startTime: { type: Date, required: true },
     bracket: [roundSchema],
 }, {
     timestamps: true,

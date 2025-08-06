@@ -35,7 +35,7 @@ const AdminPage: React.FC = () => {
         e.preventDefault();
         setTourneyMessage('');
         try {
-            const tournamentData = { name: tourneyName, gameType: tourneyGameType, entryFee: tourneyEntryFee, maxPlayers: tourneyMaxPlayers, startTime: tourneyStartTime };
+            const tournamentData = { name: tourneyName, gameType: tourneyGameType, entryFee: tourneyEntryFee, maxPlayers: tourneyMaxPlayers };
             const data = await createTournament(tournamentData);
             setTourneyMessage(`Success! Tournament "${data.name}" created.`);
         } catch (error: any) {
@@ -81,7 +81,6 @@ const AdminPage: React.FC = () => {
                                     <option value={16}>16 players</option>
                                     <option value={32}>32 players</option>
                                 </select>
-                                <input type="datetime-local" value={tourneyStartTime} onChange={e => setTourneyStartTime(e.target.value)} required className={styles.formInput} />
                                 <button type="submit" className={styles.formButton}>Create a tournament</button>
                                 {tourneyMessage && <p className={`${styles.message} ${tourneyMessage.startsWith('Error') ? styles.error : styles.success}`}>{tourneyMessage}</p>}
                             </form>

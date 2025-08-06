@@ -135,15 +135,71 @@ const CheckersBoard: React.FC<CheckersBoardProps> = ({ gameState, onMove, isMyTu
         const piece = gameState.board[index];
 
         if (selectedPiece !== null) {
-            onMove({ from: selectedPiece, to: index });
+            // Если кликнули на ту же шашку, снимаем выделение
+            if (selectedPiece === index) {
+                setSelectedPiece(null);
+                return;
+            }
+            
+            // Если кликнули на свою другую шашку, переключаем выделение
+            if (piece && piece.playerIndex === myPlayerIndex) {
+                setSelectedPiece(index);
+                return;
+            }
+            
+            // Если кликнули на пустую клетку или чужую шашку, пытаемся сделать ход
+            // Только если это валидный ход, иначе просто снимаем выделение
+            const row = Math.floor(index / 8);
+            const col = index % 8;
+            const isDark = (row + col) % 2 !== 0;
+            
+            // Ходить можно только по темным клеткам
+            if (isDark) {
+                onMove({ from: selectedPiece, to: index });
+            }
             setSelectedPiece(null);
         } else if (piece && piece.playerIndex === myPlayerIndex) {
+            // Выбираем свою шашку
             setSelectedPiece(index);
         }
+        // Если кликнули на чужую шашку или пустую светлую клетку - ничего не делаем
     };
 
     return (
         <div className={styles.boardContainer}>
+            {/* Информация о игроках */}
+            <div style={{
+                marginBottom: '10px',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#64748b'
+            }}>
+                <div style={{ marginBottom: '5px' }}>
+                    <span style={{
+                        display: 'inline-block',
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor: '#f5f5f5',
+                        border: '1px solid #ccc',
+                        marginRight: '5px'
+                    }}></span>
+                    Белые (ходят первыми) - Игрок {myPlayerIndex === 0 ? '(Вы)' : '(Противник)'}
+                </div>
+                <div>
+                    <span style={{
+                        display: 'inline-block',
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor: '#1e1e1e',
+                        border: '1px solid #333',
+                        marginRight: '5px'
+                    }}></span>
+                    Черные - Игрок {myPlayerIndex === 1 ? '(Вы)' : '(Противник)'}
+                </div>
+            </div>
+            
             <div className={styles.board}>
                 {gameState.board.map((piece, index) => {
                     const row = Math.floor(index / 8);
@@ -152,13 +208,13 @@ const CheckersBoard: React.FC<CheckersBoardProps> = ({ gameState, onMove, isMyTu
                     const isSelected = index === selectedPiece;
 
                     return (
-                        <div 
-                            key={index} 
-                            className={`${styles.square} ${isDark ? styles.dark : styles.light} ${isSelected ? styles.selected : ''}`} 
+                        <div
+                            key={index}
+                            className={`${styles.square} ${isDark ? styles.dark : styles.light} ${isSelected ? styles.selected : ''}`}
                             onClick={() => handleSquareClick(index)}
                         >
                             {piece && (
-                                <div className={`${styles.piece} ${piece.playerIndex === 0 ? styles.player0 : styles.player1}`}>
+                                <div className={`${styles.piece} ${piece.playerIndex === 0 ? styles.player1 : styles.player0}`}>
                                     {piece.isKing && '👑'}
                                 </div>
                             )}

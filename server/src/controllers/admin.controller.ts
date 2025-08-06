@@ -93,9 +93,9 @@ export const deleteRoom = (req: Request, res: Response) => {
 };
 
 export const createTournament = async (req: Request, res: Response) => {
-    const { name, gameType, entryFee, maxPlayers, startTime } = req.body;
+    const { name, gameType, entryFee, maxPlayers } = req.body;
 
-    if (!name || !gameType || !maxPlayers || !startTime) {
+    if (!name || !gameType || !maxPlayers) {
         return res.status(400).json({ message: 'Please fill in all required fields.' });
     }
 
@@ -104,8 +104,7 @@ export const createTournament = async (req: Request, res: Response) => {
             name,
             gameType,
             entryFee: Number(entryFee) || 0,
-            maxPlayers: Number(maxPlayers),
-            startTime: new Date(startTime),
+            maxPlayers: Number(maxPlayers)
         });
 
         await tournament.save();

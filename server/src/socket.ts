@@ -7,7 +7,7 @@ import { IGameLogic, GameState, GameMove } from './games/game.logic.interface';
 import { ticTacToeLogic } from './games/tic-tac-toe.logic';
 import { checkersLogic } from './games/checkers.logic'; // 1. ИМПОРТИРУЕМ новую логику
 import { chessLogic } from './games/chess.logic';
-import { backgammonLogic } from './games/backgammon.logic';
+import { backgammonLogic, rollDiceForBackgammon } from './games/backgammon.logic';
 import { advanceTournamentWinner } from './services/tournament.service';
 // import { advanceTournamentWinner } from './services/tournament.service';
 
@@ -88,50 +88,113 @@ function formatGameNameForDB(gameType: string): 'Checkers' | 'Chess' | 'Backgamm
 
 /** Централизованная функция для завершения игры */
 async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolean = false) {
+    console.log(`[EndGame] Room: ${room.id}, Winner: ${winnerId}, Draw: ${isDraw}`);
+    
+    // Обработка турнирных игр
     if (room.id.startsWith('tourney-')) {
         const [, tournamentId, , matchIdStr] = room.id.split('-');
         const matchId = parseInt(matchIdStr, 10);
-        // @ts-ignore
-        const winnerObject = room.players.find(p => p.user._id.toString() === winnerId)?.user;
         
-        if (winnerObject) {
-            // Передаем в сервис ID всего турнира, ID матча и данные победителя
-            advanceTournamentWinner(io, tournamentId, matchId, winnerObject);
+        let winnerObject = null;
+        if (winnerId && !isDraw) {
+            // @ts-ignore
+            const winnerPlayer = room.players.find(p => p.user._id.toString() === winnerId);
+            if (winnerPlayer) {
+                winnerObject = {
+                    // @ts-ignore
+                    _id: winnerPlayer.user._id.toString(),
+                    username: winnerPlayer.user.username,
+                    isBot: isBot(winnerPlayer)
+                };
+            }
         }
+        
+        // Уведомляем игроков о результате
+        io.to(room.id).emit('gameEnd', {
+            winner: winnerObject ? { user: winnerObject } : null,
+            isDraw
+        });
+        
+        // Продвигаем победителя в турнире
+        if (winnerObject) {
+            console.log(`[Tournament] Advancing winner: ${winnerObject.username} in tournament ${tournamentId}`);
+            advanceTournamentWinner(io, tournamentId, matchId, winnerObject);
+        } else if (isDraw) {
+            // В случае ничьи в турнире, выбираем случайного победителя
+            const randomWinner = room.players[Math.floor(Math.random() * room.players.length)];
+            const randomWinnerObject = {
+                // @ts-ignore
+                _id: randomWinner.user._id.toString(),
+                username: randomWinner.user.username,
+                isBot: isBot(randomWinner)
+            };
+            console.log(`[Tournament] Draw resolved randomly, winner: ${randomWinnerObject.username}`);
+            advanceTournamentWinner(io, tournamentId, matchId, randomWinnerObject);
+        }
+        
         delete rooms[room.id];
-        return; 
+        return;
     }
 
+    // Обработка обычных игр
     if (!room) return;
     if (room.disconnectTimer) clearTimeout(room.disconnectTimer);
     if (room.botJoinTimer) clearTimeout(room.botJoinTimer);
+    
     // @ts-ignore
     const winner = room.players.find(p => p.user._id.toString() === winnerId);
     // @ts-ignore
     const loser = room.players.find(p => p.user._id.toString() !== winnerId);
 
-      // ИСПРАВЛЕНИЕ: Используем отформатированное имя игры для записи в БД
     const gameNameForDB = formatGameNameForDB(room.gameType);
 
-     if (isDraw) {
+    if (isDraw) {
+        // Обработка ничьи
         for (const player of room.players) {
             if (!isBot(player)) {
-                await GameRecord.create({ user: player.user._id, gameName: gameNameForDB, status: 'DRAW', amountChanged: 0, opponent: room.players.find(p => p.user._id !== player.user._id)?.user.username || 'Bot' });
+                const opponent = room.players.find(p => p.user._id !== player.user._id);
+                await GameRecord.create({
+                    user: player.user._id,
+                    gameName: gameNameForDB,
+                    status: 'DRAW',
+                    amountChanged: 0,
+                    opponent: opponent?.user.username || 'Bot'
+                });
             }
         }
         io.to(room.id).emit('gameEnd', { winner: null, isDraw: true });
     } else if (winner && loser) {
+        // Обработка победы/поражения
         if (!isBot(winner)) {
             await User.findByIdAndUpdate(winner.user._id, { $inc: { balance: room.bet } });
-            await GameRecord.create({ user: winner.user._id, gameName: gameNameForDB, status: 'WON', amountChanged: room.bet, opponent: loser.user.username });
-            await Transaction.create({ user: winner.user._id, type: 'WAGER_WIN', amount: room.bet });
+            await GameRecord.create({
+                user: winner.user._id,
+                gameName: gameNameForDB,
+                status: 'WON',
+                amountChanged: room.bet,
+                opponent: loser.user.username
+            });
+            await Transaction.create({
+                user: winner.user._id,
+                type: 'WAGER_WIN',
+                amount: room.bet
+            });
         }
         if (!isBot(loser)) {
             await User.findByIdAndUpdate(loser.user._id, { $inc: { balance: -room.bet } });
-            await GameRecord.create({ user: loser.user._id, gameName: gameNameForDB, status: 'LOST', amountChanged: -room.bet, opponent: winner.user.username });
-            await Transaction.create({ user: loser.user._id, type: 'WAGER_LOSS', amount: room.bet });
+            await GameRecord.create({
+                user: loser.user._id,
+                gameName: gameNameForDB,
+                status: 'LOST',
+                amountChanged: -room.bet,
+                opponent: winner.user.username
+            });
+            await Transaction.create({
+                user: loser.user._id,
+                type: 'WAGER_LOSS',
+                amount: room.bet
+            });
         }
-        // УБИРАЕМ отправку authUpdate. Клиент сам запросит данные.
         io.to(room.id).emit('gameEnd', { winner, isDraw: false });
     }
     
@@ -205,42 +268,98 @@ export const initializeSocket = (io: Server) => {
         });
 
         socket.on('joinTournamentGame', (roomId: string) => {
+            console.log(`[Tournament] Player ${initialUser.username} joining tournament game ${roomId}`);
             const room = rooms[roomId];
-            if (room && room.players.some(p => p.socketId === socket.id)) {
-                socket.join(roomId);
-                
-                const connectedSockets = io.sockets.adapter.rooms.get(roomId);
-                // Если оба игрока подключились к комнате
-                if (connectedSockets && connectedSockets.size === room.players.length) {
-                    console.log(`[Tournament] Match starting in room ${roomId}`);
-                    io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
-                }
+            
+            if (!room) {
+                console.log(`[Tournament] Room ${roomId} not found`);
+                socket.emit('error', { message: 'Tournament match not found' });
+                return;
+            }
+            
+            // Проверяем, что игрок участвует в этом матче
+            const isPlayerInMatch = room.players.some(p =>
+                // @ts-ignore
+                p.user._id.toString() === initialUser._id.toString()
+            );
+            
+            if (!isPlayerInMatch) {
+                console.log(`[Tournament] Player ${initialUser.username} not in match ${roomId}`);
+                socket.emit('error', { message: 'You are not a participant in this match' });
+                return;
+            }
+            
+            // Обновляем socketId игрока
+            const playerInRoom = room.players.find(p =>
+                // @ts-ignore
+                p.user._id.toString() === initialUser._id.toString()
+            );
+            if (playerInRoom) {
+                playerInRoom.socketId = socket.id;
+            }
+            
+            socket.join(roomId);
+            console.log(`[Tournament] Player ${initialUser.username} joined room ${roomId}`);
+            
+            // Отправляем текущее состояние игры
+            socket.emit('gameStart', getPublicRoomState(room));
+            
+            // Проверяем, все ли реальные игроки подключились
+            const realPlayers = room.players.filter(p => !isBot(p));
+            const connectedRealPlayers = realPlayers.filter(p => {
+                const socketExists = io.sockets.sockets.has(p.socketId);
+                return socketExists;
+            });
+            
+            if (connectedRealPlayers.length === realPlayers.length) {
+                console.log(`[Tournament] All players connected to match ${roomId}, starting game`);
+                io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
             }
         });
 
-        // --- НОВЫЙ ОБРАБОТЧИК ДЛЯ БРОСКА КОСТЕЙ ---
+        // --- ОБРАБОТЧИК ДЛЯ БРОСКА КОСТЕЙ В НАРДАХ ---
         socket.on('rollDice', (roomId: string) => {
             const room = rooms[roomId];
             const currentPlayerId = (socket as any).user._id.toString();
 
-            if (!room || room.gameState.turn !== currentPlayerId || room.gameState.turnPhase !== 'ROLLING') {
-                return; // Игнорируем невалидные запросы
+            if (!room || room.gameType !== 'backgammon') {
+                return; // Игнорируем запросы не для нард
             }
 
-            const die1 = Math.floor(Math.random() * 6) + 1;
-            const die2 = Math.floor(Math.random() * 6) + 1;
-
-            if (die1 === die2) {
-                // Дубль - 4 хода
-                room.gameState.dice = [die1, die1, die1, die1];
-            } else {
-                room.gameState.dice = [die1, die2];
-            }
+            // Используем новую логику броска костей
+            const { newState, error } = rollDiceForBackgammon(room.gameState, currentPlayerId, room.players);
             
-            room.gameState.turnPhase = 'MOVING';
+            if (error) {
+                return socket.emit('error', { message: error });
+            }
+
+            room.gameState = newState;
             
             // Отправляем обновленное состояние с результатом броска
             io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+            
+            // Проверяем, нужно ли боту автоматически бросить кости
+            // @ts-ignore
+            const nextPlayer = room.players.find(p => p.user._id.toString() === room.gameState.turn);
+            if (nextPlayer && isBot(nextPlayer) && (room.gameState as any).turnPhase === 'ROLLING') {
+                setTimeout(() => {
+                    const currentRoom = rooms[roomId];
+                    if (!currentRoom) return;
+                    
+                    // @ts-ignore
+                    const botPlayerId = nextPlayer.user._id.toString();
+                    const { newState: botDiceState, error: botDiceError } = rollDiceForBackgammon(
+                        currentRoom.gameState,
+                        botPlayerId,
+                        currentRoom.players
+                    );
+                    
+                    if (!botDiceError) {
+                        currentRoom.gameState = botDiceState;
+                        io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+                    }
+                }, 1000);
+            }
         });
 
         socket.on('createRoom', async ({ gameType, bet }: { gameType: Room['gameType'], bet: number }) => {
@@ -529,6 +648,37 @@ export const initializeSocket = (io: Server) => {
                         let currentRoom = rooms[roomId];
                         if (!currentRoom) return;
 
+                        // Специальная логика для нард - бот должен бросить кости
+                        if (currentRoom.gameType === 'backgammon') {
+                            // @ts-ignore
+                            const botPlayerId = nextPlayer.user._id.toString();
+                            
+                            // Проверяем, нужно ли боту бросить кости
+                            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                                const { newState: diceState, error: diceError } = rollDiceForBackgammon(
+                                    currentRoom.gameState,
+                                    botPlayerId,
+                                    currentRoom.players
+                                );
+                                
+                                if (diceError) {
+                                    console.log('[Bot] Dice roll error:', diceError);
+                                    return;
+                                }
+                                
+                                currentRoom.gameState = diceState;
+                                io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+                                
+                                // Если после броска костей нет доступных ходов, ход уже переключился
+                                if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                                    return;
+                                }
+                                
+                                // Небольшая задержка перед ходами
+                                await new Promise(resolve => setTimeout(resolve, 1000));
+                            }
+                        }
+
                         let botCanMove = true;
                         let safetyBreak = 0;
 
@@ -558,6 +708,11 @@ export const initializeSocket = (io: Server) => {
                             }
                             
                             botCanMove = !botProcessResult.turnShouldSwitch;
+                            
+                            // Для нард: если ход переключился, выходим из цикла
+                            if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
+                                break;
+                            }
                         }
 
                         if (currentRoom) {

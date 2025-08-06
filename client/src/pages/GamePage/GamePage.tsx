@@ -7,6 +7,7 @@ import TicTacToeBoard from '../../components/game/TicTacToeBoard';
 import CheckersBoard from '../../components/game/CheckersBoard';
 import ChessBoard from '../../components/game/ChessBoard';
 import BackgammonBoard from '../../components/game/BackgammonBoard';
+import ErrorModal from '../../components/modals/ErrorModal';
 import { Chess } from 'chess.js';
 import styles from './GamePage.module.css';
 
@@ -46,27 +47,44 @@ const GamePage: React.FC = () => {
     const [gameMessage, setGameMessage] = useState('');
     const [countdown, setCountdown] = useState(0);
     const [redirectCountdown, setRedirectCountdown] = useState(5);
+    const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
     const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
         if (!socket || !roomId) return;
 
-        if (roomId.startsWith('tourney-')) {
+        const isTournamentGame = roomId.startsWith('tourney-');
+
+        if (isTournamentGame) {
             socket.emit('joinTournamentGame', roomId);
         } else {
             socket.emit('getGameState', roomId);
         }
 
         const onGameStart = (state: GameRoomState) => {
+            console.log('Game started:', state);
             setGameMessage('');
             setRoomState(state);
-            if (state.players.length === 1) setCountdown(15);
+            if (state.players.length === 1 && !isTournamentGame) {
+                setCountdown(15);
+            }
         };
-        const onGameUpdate = (state: GameRoomState) => setRoomState(state);
+
+        const onGameUpdate = (state: GameRoomState) => {
+            console.log('Game updated:', state);
+            setRoomState(state);
+        };
+
         const onGameEnd = async ({ winner, isDraw }: { winner: Player | null, isDraw: boolean }) => {
-            if (isDraw) setGameMessage('Draw!');
-            else if (winner?.user.username === user?.username) setGameMessage('🎉 You won!');
-            else setGameMessage(`You lost. Winner: ${winner?.user.username}`);
+            console.log('Game ended:', { winner, isDraw });
+            
+            if (isDraw) {
+                setGameMessage('🤝 Draw!');
+            } else if (winner?.user.username === user?.username) {
+                setGameMessage('🎉 You won!');
+            } else {
+                setGameMessage(`😔 You lost. Winner: ${winner?.user.username || 'Unknown'}`);
+            }
 
             try {
                 await refreshUser();
@@ -74,15 +92,31 @@ const GamePage: React.FC = () => {
                 console.error("Failed to update profile after game", error);
             }
         };
+
         const onError = ({ message }: { message: string }) => {
-            setGameMessage(`Error: ${message}`);
+            console.error('Game error:', message);
+            // Показываем модальное окно вместо завершения игры
+            setErrorModal({ isOpen: true, message });
+        };
+
+        const onPlayerReconnected = ({ message }: { message: string }) => {
+            console.log('Player reconnected:', message);
+            setGameMessage('');
+        };
+
+        const onOpponentDisconnected = ({ message }: { message: string }) => {
+            console.log('Opponent disconnected:', message);
+            setGameMessage(`⏳ ${message}`);
         };
         
         socket.on('gameStart', onGameStart);
         socket.on('gameUpdate', onGameUpdate);
         socket.on('gameEnd', onGameEnd);
         socket.on('error', onError);
+        socket.on('playerReconnected', onPlayerReconnected);
+        socket.on('opponentDisconnected', onOpponentDisconnected);
 
+        // Запрашиваем текущее состояние игры
         socket.emit('getGameState', roomId);
 
         return () => {
@@ -90,6 +124,8 @@ const GamePage: React.FC = () => {
             socket.off('gameUpdate', onGameUpdate);
             socket.off('gameEnd', onGameEnd);
             socket.off('error', onError);
+            socket.off('playerReconnected', onPlayerReconnected);
+            socket.off('opponentDisconnected', onOpponentDisconnected);
         };
     }, [socket, roomId, user?.username, navigate, gameType, refreshUser]);
 
@@ -106,7 +142,14 @@ const GamePage: React.FC = () => {
                 setRedirectCountdown(prev => {
                     if (prev <= 1) {
                         if (redirectTimerRef.current) clearInterval(redirectTimerRef.current);
-                        navigate(`/lobby/${gameType}`);
+                        
+                        // Для турнирных игр возвращаемся к турниру, для обычных - в лобби
+                        if (roomId?.startsWith('tourney-')) {
+                            const tournamentId = roomId.split('-')[1];
+                            navigate(`/tournaments/${tournamentId}`);
+                        } else {
+                            navigate(`/lobby/${gameType}`);
+                        }
                         return 0;
                     }
                     return prev - 1;
@@ -119,12 +162,27 @@ const GamePage: React.FC = () => {
     }, [gameMessage, navigate, gameType]);
 
     const handleLeaveGame = () => {
-        if (socket && roomId) socket.emit('leaveGame', roomId);
-        navigate(`/lobby/${gameType}`);
+        if (socket && roomId) {
+            socket.emit('leaveGame', roomId);
+        }
+        
+        // Для турнирных игр возвращаемся к турниру, для обычных - в лобби
+        if (roomId?.startsWith('tourney-')) {
+            const tournamentId = roomId.split('-')[1];
+            navigate(`/tournaments/${tournamentId}`);
+        } else {
+            navigate(`/lobby/${gameType}`);
+        }
     };
 
     const handleMove = (moveData: any) => {
-        if (socket) socket.emit('playerMove', { roomId, move: moveData });
+        if (socket) {
+            socket.emit('playerMove', { roomId, move: moveData });
+        }
+    };
+
+    const closeErrorModal = () => {
+        setErrorModal({ isOpen: false, message: '' });
     };
 
     const handleRollDice = () => {
@@ -213,15 +271,29 @@ const GamePage: React.FC = () => {
     const opponent = roomState.players.find(p => p.user._id !== user?._id);
     const isMyTurn = roomState.gameState.turn === user?._id;
 
+    const isTournamentGame = roomId?.startsWith('tourney-');
+    const backButtonText = isTournamentGame ? '← Back to tournament' : '← Back to lobby';
+    const backButtonAction = () => {
+        if (isTournamentGame) {
+            const tournamentId = roomId!.split('-')[1];
+            navigate(`/tournaments/${tournamentId}`);
+        } else {
+            navigate(`/lobby/${gameType}`);
+        }
+    };
+
     return (
         <div className={styles.pageContainer}>
             <div className={styles.header}>
-                <button onClick={() => navigate(`/lobby/${gameType}`)} className={styles.backButton}>
-                    ← Back to lobby
+                <button onClick={backButtonAction} className={styles.backButton}>
+                    {backButtonText}
                 </button>
                 <div className={styles.gameHeader}>
                     <div className={styles.gameIcon}>{getGameIcon(gameType)}</div>
-                    <div><h1>{formatGameName(gameType)}</h1></div>
+                    <div>
+                        <h1>{formatGameName(gameType)}</h1>
+                        {isTournamentGame && <p style={{fontSize: '0.9em', opacity: 0.8}}>Tournament Match</p>}
+                    </div>
                 </div>
             </div>
 
@@ -262,8 +334,8 @@ const GamePage: React.FC = () => {
                         </div>
                         <h3 className={`${styles.statusTitle} ${styles.statusTitleEnd}`}>{gameMessage}</h3>
                         <div className={styles.statusCountdown}>
-                            <p>Return to lobby in: <span style={{fontWeight: 'bold'}}>{redirectCountdown} s</span></p>
-                            <button onClick={() => navigate(`/lobby/${gameType}`)} className={`${styles.btn} ${styles.btnPrimary}`}>Back now</button>
+                            <p>Return in: <span style={{fontWeight: 'bold'}}>{redirectCountdown} s</span></p>
+                            <button onClick={backButtonAction} className={`${styles.btn} ${styles.btnPrimary}`}>Back now</button>
                         </div>
                     </div>
                 )}

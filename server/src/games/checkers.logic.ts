@@ -93,7 +93,8 @@ function getMovesForPiece(board: (Piece | null)[], fromIndex: number): CheckersM
     // --- Логика для обычных шашек ---
     if (!piece.isKing) {
         // Простые ходы (только вперед)
-        const moveDirection = piece.playerIndex === 0 ? 1 : -1;
+        // Игрок 0 (белые) ходят вверх (уменьшение row), игрок 1 (черные) ходят вниз (увеличение row)
+        const moveDirection = piece.playerIndex === 0 ? -1 : 1;
         for (const dCol of [-1, 1]) {
             const toRow = fromRow + moveDirection;
             const toCol = fromCol + dCol;
@@ -120,7 +121,7 @@ function getMovesForPiece(board: (Piece | null)[], fromIndex: number): CheckersM
                 }
             }
         }
-    } 
+    }
     // --- Логика для "дамок" ---
     else {
         // Простые ходы (в 4 направлениях на 1 клетку)
@@ -190,10 +191,14 @@ export const checkersLogic: IGameLogic = {
             const row = Math.floor(i / 8);
             const col = i % 8;
             if ((row + col) % 2 !== 0) {
-                if (row <= 2) board[i] = { playerIndex: 0, isKing: false };
-                else if (row >= 5) board[i] = { playerIndex: 1, isKing: false };
+                // Игрок 0 (белые) - снизу доски (ряды 5-7), ходят первыми
+                if (row >= 5) board[i] = { playerIndex: 0, isKing: false };
+                // Игрок 1 (черные) - сверху доски (ряды 0-2)
+                else if (row <= 2) board[i] = { playerIndex: 1, isKing: false };
             }
         }
+        
+        // Первый игрок (создатель комнаты) всегда играет белыми и ходит первым
         // @ts-ignore
         return { board, turn: players[0].user._id.toString(), mustCaptureWith: null };
     },
@@ -239,7 +244,8 @@ export const checkersLogic: IGameLogic = {
         }
         
         const toRow = Math.floor(to / 8);
-        if (!piece.isKing && ((piece.playerIndex === 0 && toRow === 7) || (piece.playerIndex === 1 && toRow === 0))) {
+        // Превращение в дамки: игрок 0 (белые) достигают ряда 0, игрок 1 (черные) достигают ряда 7
+        if (!piece.isKing && ((piece.playerIndex === 0 && toRow === 0) || (piece.playerIndex === 1 && toRow === 7))) {
             newBoard[to]!.isKing = true;
         }
 

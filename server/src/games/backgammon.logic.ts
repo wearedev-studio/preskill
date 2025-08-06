@@ -1,245 +1,300 @@
 import { IGameLogic, GameMove, GameState } from './game.logic.interface';
 import { Room } from '../socket';
-
-// ==================================
-// Типы и константы
-// ==================================
-
-type Point = [playerIndex: 0 | 1, count: number] | null;
+import { BackgammonEngine, PlayerColor, BackgammonPiece, Point, DiceRoll } from './backgammon-engine';
 
 type BackgammonState = {
-    // Доска: 26 "пунктов". 
-    // 1-24: игровые пункты
-    // 0: бар для игрока 1 (белые)
-    // 25: бар для игрока 0 (черные)
-    points: Point[]; 
-    turn: string; // userId игрока
-    dice: number[]; // Результат броска костей, например [3, 5]
-    turnPhase: 'ROLLING' | 'MOVING'; // Фаза хода
-    borneOff: [number, number]; // Сколько шашек вывели игроки 0 и 1
+    board: Point[];
+    bar: { white: BackgammonPiece[]; black: BackgammonPiece[] };
+    home: { white: BackgammonPiece[]; black: BackgammonPiece[] };
+    currentPlayer: PlayerColor;
+    diceRoll: DiceRoll | null;
+    moveHistory: any[];
+    turn: string; // userId игрока для совместимости с платформой
+    turnPhase: 'ROLLING' | 'MOVING';
+    isGameOver: boolean;
+    winner?: string;
 };
 
 type BackgammonMove = {
-    from: number; // от 0 до 25
-    to: number;   // от 1 до 24, либо 0/25 для вывода с доски
+    from: number;
+    to: number;
+    dieValue: number;
 };
 
-// ==================================
-// Вспомогательные функции
-// ==================================
-
-/** Проверяет, все ли шашки игрока находятся в его "доме" */
-function allCheckersInHome(points: Point[], borneOffCount: number, playerIndex: 0 | 1): boolean {
-    let checkerCount = 0;
-    const homeRange = playerIndex === 0 ? { start: 1, end: 6 } : { start: 19, end: 24 };
-    
-    for (let i = 1; i <= 24; i++) {
-        const point = points[i];
-        if (point && point[0] === playerIndex) {
-            if (i < homeRange.start || i > homeRange.end) return false;
-            checkerCount += point[1];
-        }
-    }
-    // Проверяем, что все 15 шашек (на доске + выведенные) в доме
-    return (checkerCount + borneOffCount) === 15;
+// Создание движка из состояния игры
+function createEngineFromState(gameState: BackgammonState): BackgammonEngine {
+    const engine = new BackgammonEngine();
+    engine.restoreGameState({
+        board: gameState.board,
+        bar: gameState.bar,
+        home: gameState.home,
+        currentPlayer: gameState.currentPlayer,
+        diceRoll: gameState.diceRoll,
+        moveHistory: gameState.moveHistory
+    });
+    return engine;
 }
 
-/** Находит все легальные ходы для игрока на основе его костей */
-function findAllLegalMoves(gameState: BackgammonState, playerIndex: 0 | 1): BackgammonMove[] {
-    const legalMoves: BackgammonMove[] = [];
-    const { points, dice } = gameState;
-    const moveDirection = playerIndex === 0 ? -1 : 1;
-    const barIndex = playerIndex === 0 ? 25 : 0;
-
-    // 1. Если есть шашки на баре, только ходы с бара легальны
-    if (points[barIndex] && points[barIndex]![1] > 0) {
-        for (const die of dice) {
-            const toIndex = playerIndex === 0 ? 25 - die : die;
-            const targetPoint = points[toIndex];
-            if (!targetPoint || targetPoint[0] === playerIndex || targetPoint[1] <= 1) {
-                legalMoves.push({ from: barIndex, to: toIndex });
-            }
-        }
-        return legalMoves;
-    }
-
-    // 2. Если на баре шашек нет, ищем ходы с доски
-    const canBearOff = allCheckersInHome(points, gameState.borneOff[playerIndex], playerIndex);
-
-    for (let from = 1; from <= 24; from++) {
-        const point = points[from];
-        if (point && point[0] === playerIndex) {
-            for (const die of dice) {
-                const to = from + (die * moveDirection);
-                // 2a. Проверяем возможность вывода шашек (bear off)
-                if (canBearOff && (to < 1 || to > 24)) {
-                    legalMoves.push({ from, to: playerIndex === 0 ? 0 : 25 });
-                } 
-                // 2b. Проверяем обычные ходы
-                else if (to >= 1 && to <= 24) {
-                    const targetPoint = points[to];
-                    if (!targetPoint || targetPoint[0] === playerIndex || targetPoint[1] <= 1) {
-                        legalMoves.push({ from, to });
-                    }
-                }
-            }
-        }
-    }
-    
-    // TODO: Добавить более сложную логику, например, обязательность использования большей кости
-    return legalMoves;
-}
-
-// ==================================
-// Экспортируемый объект логики
-// ==================================
 export const backgammonLogic: IGameLogic = {
     createInitialState(players: Room['players']): BackgammonState {
-        const points: BackgammonState['points'] = Array(26).fill(null);
-        // Начальная расстановка
-        // Игрок 0 (черные), движется от 24 к 1
-        points[24] = [0, 2]; points[13] = [0, 5]; points[8] = [0, 3]; points[6] = [0, 5];
-        // Игрок 1 (белые), движется от 1 к 24
-        points[1] = [1, 2]; points[12] = [1, 5]; points[17] = [1, 3]; points[19] = [1, 5];
+        console.log('[Backgammon] Creating initial state for players:', players.length);
+        
+        const engine = new BackgammonEngine();
+        const engineState = engine.getGameState();
         
         return {
-            points,
+            board: engineState.board,
+            bar: engineState.bar,
+            home: engineState.home,
+            currentPlayer: engineState.currentPlayer,
+            diceRoll: engineState.diceRoll,
+            moveHistory: engineState.moveHistory,
             // @ts-ignore
-            turn: players[0].user._id.toString(),
-            dice: [],
+            turn: players[0]?.user._id.toString(), // Первый игрок (белые) ходит первым
             turnPhase: 'ROLLING',
-            borneOff: [0, 0],
+            isGameOver: false
         };
     },
 
     processMove(gameState: BackgammonState, move: BackgammonMove, playerId: string, players: Room['players']) {
-        const { from, to } = move;
-        // @ts-ignore
-        const playerIndex = players.findIndex(p => p.user._id.toString() === playerId) as 0 | 1;
+        console.log('[Backgammon] Processing move:', { move, playerId, turnPhase: gameState.turnPhase });
         
-        // --- 1. Базовые проверки ---
-        if (gameState.turn !== playerId || gameState.turnPhase !== 'MOVING') {
+        // Проверяем, что ход делает правильный игрок
+        if (gameState.turn !== playerId) {
+            console.log('[Backgammon] Wrong player turn');
             return { newState: gameState, error: "Сейчас не ваш ход.", turnShouldSwitch: false };
         }
-        if (gameState.dice.length === 0) {
-            return { newState: gameState, error: "У вас закончились ходы.", turnShouldSwitch: false };
+
+        // Проверяем фазу хода
+        if (gameState.turnPhase !== 'MOVING') {
+            console.log('[Backgammon] Wrong turn phase');
+            return { newState: gameState, error: "Сначала бросьте кости.", turnShouldSwitch: false };
         }
 
-        // --- 2. Проверка хода с бара ---
-        const barIndex = playerIndex === 0 ? 25 : 0;
-        if (gameState.points[barIndex] && gameState.points[barIndex]![1] > 0) {
-            if (from !== barIndex) {
-                return { newState: gameState, error: "Вы должны сначала вывести все шашки с бара.", turnShouldSwitch: false };
-            }
+        // Определяем индекс игрока
+        const playerIndex = players.findIndex(p => (p.user as any)._id.toString() === playerId);
+        if (playerIndex === -1) {
+            console.log('[Backgammon] Player not found');
+            return { newState: gameState, error: "Игрок не найден.", turnShouldSwitch: false };
         }
+
+        // Определяем ожидаемый цвет (0 = белые, 1 = черные)
+        const expectedColor: PlayerColor = playerIndex === 0 ? 'white' : 'black';
         
-        // --- 3. Проверка хода и использования костей ---
-        const moveDirection = playerIndex === 0 ? -1 : 1;
-        let moveDistance: number;
-        if (from === barIndex) { // Вход с бара
-            moveDistance = playerIndex === 0 ? 25 - to : to;
-        } else {
-            moveDistance = (to - from) * moveDirection;
+        // Проверяем, что сейчас ход нужного игрока
+        if (gameState.currentPlayer !== expectedColor) {
+            console.log('[Backgammon] Wrong color turn. Expected:', expectedColor, 'Actual:', gameState.currentPlayer);
+            return { newState: gameState, error: "Сейчас не ваш ход по правилам нард.", turnShouldSwitch: false };
         }
 
-        const dieIndex = gameState.dice.indexOf(moveDistance);
-        if (dieIndex === -1) {
-            // Проверка на использование кости большего номинала при выводе
-            // @ts-ignore
-            const canBearOff = allCheckersInHome(gameState.points, playerIndex);
-            const isBearingOff = playerIndex === 0 ? to < 1 : to > 24;
-            if (canBearOff && isBearingOff) {
-                const highestDie = Math.max(...gameState.dice);
-                const highestPointWithChecker = playerIndex === 0 
-                    ? Math.max(...gameState.points.map((p, i) => (p && p[0] === playerIndex && i >=1 && i <= 6) ? i : 0))
-                    : Math.min(...gameState.points.map((p, i) => (p && p[0] === playerIndex && i >= 19 && i <= 24) ? i : 25));
+        // Создаем движок из текущего состояния
+        const engine = createEngineFromState(gameState);
+        
+        // Выполняем ход
+        const moveSuccess = engine.makeMove(move.from, move.to, move.dieValue);
+        
+        if (!moveSuccess) {
+            console.log('[Backgammon] Move execution failed');
+            return { newState: gameState, error: "Недопустимый ход.", turnShouldSwitch: false };
+        }
+
+        // Получаем новое состояние
+        const newEngineState = engine.getGameState();
+        
+        // Проверяем состояние игры
+        const gameStatus = engine.isGameOver();
+        
+        // Определяем, нужно ли переключать ход
+        let turnShouldSwitch = false;
+        let nextTurn = gameState.turn;
+        let nextTurnPhase: 'ROLLING' | 'MOVING' = gameState.turnPhase;
+        
+        // Если нет доступных ходов или все кости использованы
+        if (!newEngineState.diceRoll || newEngineState.diceRoll.availableMoves.length === 0 || !engine.hasAvailableMoves()) {
+            turnShouldSwitch = true;
+            nextTurnPhase = 'ROLLING';
+            
+            if (!gameStatus.isGameOver) {
+                engine.switchPlayer();
+                const updatedEngineState = engine.getGameState();
+                const nextPlayerIndex = playerIndex === 0 ? 1 : 0;
+                const nextPlayer = players[nextPlayerIndex];
+                nextTurn = nextPlayer ? (nextPlayer.user as any)._id.toString() : gameState.turn;
                 
-                if (moveDistance >= highestDie && (playerIndex === 0 ? from === highestPointWithChecker : from === highestPointWithChecker)) {
-                    // Разрешаем ход
-                } else {
-                    return { newState: gameState, error: "У вас нет такого значения на костях.", turnShouldSwitch: false };
-                }
-            } else {
-                return { newState: gameState, error: "У вас нет такого значения на костях.", turnShouldSwitch: false };
-            }
-        }
-        
-        // --- 4. Проверка пункта назначения ---
-        const targetPoint = gameState.points[to];
-        if (targetPoint && targetPoint[0] !== playerIndex && targetPoint[1] > 1) {
-            return { newState: gameState, error: "Этот пункт заблокирован противником.", turnShouldSwitch: false };
-        }
-        
-        // --- 5. Применение хода ---
-        const newPoints = [...gameState.points];
-        const newDice = [...gameState.dice];
-        const newBorneOff = [...gameState.borneOff] as [number, number];
-
-        // Убираем шашку с начальной точки
-        if (newPoints[from] && newPoints[from]![1] > 0) {
-            newPoints[from]![1]--;
-            if (newPoints[from]![1] === 0) newPoints[from] = null;
-        }
-
-        // Вывод шашки с доски (bear off)
-        if (playerIndex === 0 ? to < 1 : to > 24) {
-            newBorneOff[playerIndex]++;
-        } else {
-            // "Бить" шашку противника
-            if (targetPoint && targetPoint[0] !== playerIndex && targetPoint[1] === 1) {
-                const opponentBarIndex = playerIndex === 0 ? 0 : 25;
-                if (!newPoints[opponentBarIndex]) newPoints[opponentBarIndex] = [playerIndex === 0 ? 1 : 0, 0];
-                newPoints[opponentBarIndex]![1]++;
-                newPoints[to] = [playerIndex, 1];
-            } else { // Обычный ход на пункт
-                if (!newPoints[to]) newPoints[to] = [playerIndex, 0];
-                newPoints[to]![1]++;
+                // Обновляем состояние движка после переключения
+                newEngineState.currentPlayer = updatedEngineState.currentPlayer;
+                newEngineState.diceRoll = null; // Очищаем кости для следующего игрока
             }
         }
 
-        // Удаляем использованную кость
-        newDice.splice(dieIndex, 1);
+        const newGameState: BackgammonState = {
+            board: newEngineState.board,
+            bar: newEngineState.bar,
+            home: newEngineState.home,
+            currentPlayer: newEngineState.currentPlayer,
+            diceRoll: newEngineState.diceRoll,
+            moveHistory: newEngineState.moveHistory,
+            turn: nextTurn,
+            turnPhase: nextTurnPhase,
+            isGameOver: gameStatus.isGameOver
+        };
 
-        const newState: BackgammonState = { ...gameState, points: newPoints, dice: newDice, borneOff: newBorneOff };
-
-        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
-        const turnShouldSwitch = newDice.length === 0;
-        if (turnShouldSwitch) {
-            newState.turnPhase = 'ROLLING';
-            // Явно передаем ход следующему игроку
-            // @ts-ignore
-            const nextPlayer = players.find(p => p.user._id.toString() !== playerId)!;
-            // @ts-ignore
-            newState.turn = nextPlayer.user._id.toString();
+        // Определяем победителя
+        if (gameStatus.isGameOver && gameStatus.winner) {
+            const winnerIndex = gameStatus.winner === 'white' ? 0 : 1;
+            const winner = players[winnerIndex];
+            if (winner) {
+                newGameState.winner = (winner.user as any)._id.toString();
+            }
         }
-        
-        return { newState, turnShouldSwitch };
+
+        console.log('[Backgammon] Move processed successfully. Turn should switch:', turnShouldSwitch);
+        return { newState: newGameState, turnShouldSwitch };
     },
 
     checkGameEnd(gameState: BackgammonState, players: Room['players']) {
-        if (gameState.borneOff[0] === 15) {
-            // @ts-ignore
-            return { isGameOver: true, winnerId: players[0].user._id.toString(), isDraw: false };
+        console.log('[Backgammon] Checking game end. Game over:', gameState.isGameOver);
+        
+        if (!gameState.isGameOver) {
+            return { isGameOver: false, isDraw: false };
         }
-        if (gameState.borneOff[1] === 15) {
-            // @ts-ignore
-            return { isGameOver: true, winnerId: players[1].user._id.toString(), isDraw: false };
-        }
-        return { isGameOver: false, isDraw: false };
+
+        return { 
+            isGameOver: true, 
+            winnerId: gameState.winner,
+            isDraw: false 
+        };
     },
     
     makeBotMove(gameState: BackgammonState, playerIndex: 0 | 1): GameMove {
-        // 1. Находим все возможные легальные ходы
-        const legalMoves = findAllLegalMoves(gameState, playerIndex);
-
-        if (legalMoves.length > 0) {
-            // 2. Выбираем случайный из легальных ходов
-            // В будущем можно добавить сюда более сложную стратегию
-            const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-            return randomMove;
+        console.log('[Backgammon] Bot making move for player:', playerIndex);
+        
+        const expectedColor: PlayerColor = playerIndex === 0 ? 'white' : 'black';
+        
+        // Проверяем, что сейчас ход бота
+        if (gameState.currentPlayer !== expectedColor) {
+            console.log(`[Backgammon] Bot move requested but it's not bot's turn. Expected: ${expectedColor}, Actual: ${gameState.currentPlayer}`);
+            return {};
         }
 
-        // Если ходов нет, возвращаем пустой объект
+        // Проверяем фазу хода
+        if (gameState.turnPhase !== 'MOVING') {
+            console.log('[Backgammon] Bot cannot move - wrong phase');
+            return {};
+        }
+
+        // Создаем движок из текущего состояния
+        const engine = createEngineFromState(gameState);
+        
+        // Получаем все возможные ходы
+        const possibleMoves = engine.getPossibleMoves();
+        
+        console.log('[Backgammon] Available moves for bot:', possibleMoves.length);
+        
+        if (possibleMoves.length > 0) {
+            // Простая стратегия: приоритет выводу фигур, затем продвижению вперед
+            let selectedMove = possibleMoves[0];
+            
+            // Приоритет выводу фигур из дома
+            const bearOffMoves = possibleMoves.filter(move => move.to === -2);
+            if (bearOffMoves.length > 0) {
+                selectedMove = bearOffMoves[0];
+                console.log('[Backgammon] Bot chose bear off move');
+            } else {
+                // Приоритет ходам с бара
+                const barMoves = possibleMoves.filter(move => move.from === -1);
+                if (barMoves.length > 0) {
+                    selectedMove = barMoves[0];
+                    console.log('[Backgammon] Bot chose bar move');
+                } else {
+                    // Приоритет продвижению вперед
+                    const forwardMoves = possibleMoves.filter(move => {
+                        if (expectedColor === 'white') {
+                            return move.to > move.from;
+                        } else {
+                            return move.to < move.from;
+                        }
+                    });
+                    
+                    if (forwardMoves.length > 0) {
+                        selectedMove = forwardMoves[Math.floor(Math.random() * forwardMoves.length)];
+                        console.log('[Backgammon] Bot chose forward move');
+                    } else {
+                        selectedMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                        console.log('[Backgammon] Bot chose random move');
+                    }
+                }
+            }
+            
+            const botMove = {
+                from: selectedMove.from,
+                to: selectedMove.to,
+                dieValue: selectedMove.dieValue
+            };
+            
+            console.log('[Backgammon] Bot move:', botMove);
+            return botMove;
+        }
+        
+        console.log('[Backgammon] No moves available for bot');
         return {};
     }
 };
+
+// Функция для обработки броска костей
+export function rollDiceForBackgammon(gameState: BackgammonState, playerId: string, players: Room['players']): { newState: BackgammonState; error?: string } {
+    console.log('[Backgammon] Rolling dice for player:', playerId);
+    
+    // Проверяем, что ход делает правильный игрок
+    if (gameState.turn !== playerId) {
+        console.log('[Backgammon] Wrong player turn for dice roll');
+        return { newState: gameState, error: "Сейчас не ваш ход." };
+    }
+
+    // Проверяем фазу хода
+    if (gameState.turnPhase !== 'ROLLING') {
+        console.log('[Backgammon] Wrong turn phase for dice roll');
+        return { newState: gameState, error: "Сейчас не время бросать кости." };
+    }
+
+    // Создаем движок из текущего состояния
+    const engine = createEngineFromState(gameState);
+    
+    // Бросаем кости
+    const diceRoll = engine.rollDice();
+    
+    // Получаем новое состояние
+    const newEngineState = engine.getGameState();
+    
+    const newGameState: BackgammonState = {
+        ...gameState,
+        diceRoll: newEngineState.diceRoll,
+        turnPhase: 'MOVING'
+    };
+
+    console.log('[Backgammon] Dice rolled:', diceRoll.dice, 'Available moves:', diceRoll.availableMoves);
+    
+    // Проверяем, есть ли доступные ходы
+    if (!engine.hasAvailableMoves()) {
+        console.log('[Backgammon] No available moves, skipping turn');
+        newGameState.turnPhase = 'ROLLING';
+        
+        // Переключаем игрока в движке
+        engine.switchPlayer();
+        const updatedEngineState = engine.getGameState();
+        
+        // Переключаем игрока в состоянии игры
+        const playerIndex = players.findIndex(p => (p.user as any)._id.toString() === playerId);
+        const nextPlayerIndex = playerIndex === 0 ? 1 : 0;
+        const nextPlayer = players[nextPlayerIndex];
+        if (nextPlayer) {
+            newGameState.turn = (nextPlayer.user as any)._id.toString();
+            newGameState.currentPlayer = updatedEngineState.currentPlayer;
+        }
+        
+        // Очищаем кости для следующего игрока
+        newGameState.diceRoll = null;
+    }
+    
+    return { newState: newGameState };
+}

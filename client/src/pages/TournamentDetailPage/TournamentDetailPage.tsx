@@ -41,17 +41,24 @@ const TournamentDetailPage: React.FC = () => {
         if (!socket || !id) return;
 
         const handleTournamentUpdate = ({ tournamentId }: { tournamentId: string }) => {
-            if (tournamentId === id) fetchTournament();
+            console.log('Tournament updated:', tournamentId);
+            if (tournamentId === id) {
+                fetchTournament();
+            }
         };
 
         const handleMatchReady = ({ tournamentId, roomId }: { tournamentId: string, roomId: string }) => {
+            console.log('Match ready:', { tournamentId, roomId });
             if (tournamentId === id) {
                 setActiveMatchRoomId(roomId);
+                // Показываем уведомление пользователю
+                alert('Ваш матч готов! Нажмите кнопку "JOIN NOW" чтобы присоединиться.');
             }
         };
 
         socket.on('tournamentUpdated', handleTournamentUpdate);
         socket.on('matchReady', handleMatchReady);
+        
         return () => {
             socket.off('tournamentUpdated', handleTournamentUpdate);
             socket.off('matchReady', handleMatchReady);
@@ -136,28 +143,38 @@ const TournamentDetailPage: React.FC = () => {
 
             <div className={styles.card}>
                 <h2 style={{fontSize: '1.5rem', fontWeight: 700, color: 'white', marginBottom: '1.5rem'}}>Tournament grid</h2>
-                <div className={styles.bracketContainer}>
-                    <div className={styles.bracket}>
-                        {tournament.bracket.map((round: any, roundIndex: number) => (
-                            <div key={roundIndex} className={styles.round}>
-                                <h3 className={styles.roundTitle}>{round.roundName}</h3>
-                                {round.matches.map((match: any) => (
-                                    <div key={match.matchId} className={styles.match}>
-                                        <div className={`${styles.playerSlot} ${match.winner?._id === match.players[0]?._id ? styles.winner : ''}`}>
-                                            <span>{match.players[0]?.username || 'Loading...'}</span>
-                                            {match.winner?._id === match.players[0]?._id && <Crown size={16} />}
+                {tournament.bracket && tournament.bracket.length > 0 ? (
+                    <div className={styles.bracketContainer}>
+                        <div className={styles.bracket}>
+                            {tournament.bracket.map((round: any, roundIndex: number) => (
+                                <div key={roundIndex} className={styles.round}>
+                                    <h3 className={styles.roundTitle}>{round.roundName}</h3>
+                                    {round.matches.map((match: any) => (
+                                        <div key={match.matchId} className={styles.match}>
+                                            <div className={`${styles.playerSlot} ${match.winner?._id === match.players[0]?._id ? styles.winner : ''}`}>
+                                                <span>{match.players[0]?.username || 'TBD'}</span>
+                                                {match.winner?._id === match.players[0]?._id && <Crown size={16} />}
+                                            </div>
+                                            <div className={styles.vsText}>VS</div>
+                                            <div className={`${styles.playerSlot} ${match.winner?._id === match.players[1]?._id ? styles.winner : ''}`}>
+                                                <span>{match.players[1]?.username || 'TBD'}</span>
+                                                {match.winner?._id === match.players[1]?._id && <Crown size={16} />}
+                                            </div>
                                         </div>
-                                        <div className={styles.vsText}>VS</div>
-                                        <div className={`${styles.playerSlot} ${match.winner?._id === match.players[1]?._id ? styles.winner : ''}`}>
-                                            <span>{match.players[1]?.username || 'Loading...'}</span>
-                                            {match.winner?._id === match.players[1]?._id && <Crown size={16} />}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ))}
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                        {tournament.status === 'REGISTERING' ? (
+                            <p>Tournament bracket will be generated when the tournament starts.</p>
+                        ) : (
+                            <p>No bracket available.</p>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
