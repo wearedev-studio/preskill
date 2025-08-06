@@ -1,378 +1,549 @@
 import { Server } from 'socket.io';
-import cron from 'node-cron';
-import Tournament, { ITournament, ITournamentPlayer } from '../models/Tournament.model';
-import { botUsernames, Room, gameLogics, rooms, userSocketMap } from '../socket';
+import Tournament, { ITournament, ITournamentPlayer, ITournamentMatch } from '../models/Tournament.model';
 import User from '../models/User.model';
 import Transaction from '../models/Transaction.model';
 import { createNotification } from './notification.service';
+import { createTournamentRoom } from './tournamentRoom.service';
+import { Types } from 'mongoose';
 
-// Вспомогательная функция для перемешивания
-function shuffleArray(array: any[]) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
+// Хранилище активных турниров в памяти
+export const activeTournaments: Record<string, ITournament> = {};
 
-/**
- * Создает игровую комнату для турнирного матча и оповещает игроков
- */
-async function createTournamentMatchRoom(io: Server, tournament: ITournament, match: any) {
-    console.log(`[Tournament] Creating match room for tournament ${tournament.name}, match ${match.matchId}`);
-    console.log(`[Tournament] Match players:`, match.players.map((p: any) => `${p.username} (bot: ${p.isBot})`));
-    
-    const realPlayers = match.players.filter((p: any) => !p.isBot);
-    
-    // Если играют только боты, имитируем игру с задержкой
-    if (realPlayers.length === 0) {
-        const winner = match.players[Math.floor(Math.random() * 2)];
-        console.log(`[Tournament] Bot vs Bot match: ${match.players[0].username} vs ${match.players[1].username}, winner: ${winner.username}`);
-        
-        // Имитируем время игры (от 30 секунд до 2 минут)
-        const gameTime = Math.random() * (120000 - 30000) + 30000;
-        setTimeout(() => {
-            advanceTournamentWinner(io, tournament._id!.toString(), match.matchId, winner);
-        }, gameTime);
-        return;
-    }
+// Хранилище таймеров турниров
+const tournamentTimers: Record<string, NodeJS.Timeout> = {};
 
-    const roomId = `tourney-${tournament._id}-match-${match.matchId}`;
-    console.log(`[Tournament] Creating room with ID: ${roomId}`);
-    
-    const gameLogic = gameLogics[tournament.gameType];
-    if (!gameLogic) {
-        console.error(`[Tournament] No game logic found for game type: ${tournament.gameType}`);
-        return;
-    }
-    
-    // Создаем игроков для комнаты (включая ботов)
-    const roomPlayers = [];
-    for (const player of match.players) {
-        if (player.isBot) {
-            // Для бота создаем фиктивного игрока
-            roomPlayers.push({
-                socketId: 'bot_socket_id',
-                user: {
-                    _id: player._id,
-                    username: player.username,
-                    avatar: 'bot_avatar.png',
-                    balance: 9999
-                }
-            });
-            console.log(`[Tournament] Added bot player: ${player.username}`);
-        } else {
-            // Для реального игрока ищем его сокет
-            const socketId = userSocketMap[player._id.toString()];
-            console.log(`[Tournament] Looking for socket for player ${player.username} (${player._id}): ${socketId}`);
-            console.log(`[Tournament] Current userSocketMap:`, Object.keys(userSocketMap));
-            
-            if (socketId) {
-                const socket = io.sockets.sockets.get(socketId);
-                if (socket) {
-                    roomPlayers.push({ socketId, user: (socket as any).user });
-                    console.log(`[Tournament] Added real player: ${player.username} with socket ${socketId}`);
-                } else {
-                    console.log(`[Tournament] Socket ${socketId} not found for player ${player.username}`);
-                    // Попробуем добавить игрока без активного сокета
-                    roomPlayers.push({
-                        socketId: 'offline_player',
-                        user: {
-                            _id: player._id,
-                            username: player.username,
-                            avatar: 'default_avatar.png',
-                            balance: 0
-                        }
-                    });
-                    console.log(`[Tournament] Added offline player: ${player.username}`);
-                }
-            } else {
-                console.log(`[Tournament] No socket mapping found for player ${player.username}`);
-                // Попробуем добавить игрока без активного сокета
-                roomPlayers.push({
-                    socketId: 'offline_player',
-                    user: {
-                        _id: player._id,
-                        username: player.username,
-                        avatar: 'default_avatar.png',
-                        balance: 0
-                    }
-                });
-                console.log(`[Tournament] Added offline player: ${player.username}`);
-            }
-        }
-    }
-
-    // Проверяем, что у нас есть хотя бы игроки для матча
-    if (roomPlayers.length === 0) {
-        console.log(`[Tournament] No players found for match ${match.matchId}, retrying later`);
-        setTimeout(() => createTournamentMatchRoom(io, tournament, match), 5000);
-        return;
-    }
-    
-    console.log(`[Tournament] Created room with ${roomPlayers.length} players for match ${match.matchId}`);
-
-    console.log(`[Tournament] Creating initial game state for ${tournament.gameType}`);
-    const initialGameState = gameLogic.createInitialState(roomPlayers);
-    
-    const newRoom: Room = {
-        id: roomId,
-        gameType: tournament.gameType,
-        bet: 0, // В турнирах нет ставок
-        players: roomPlayers,
-        gameState: initialGameState,
-    };
-    rooms[roomId] = newRoom;
-    console.log(`[Tournament] Room ${roomId} created and added to rooms`);
-
-    // Сохраняем ID комнаты в базе данных
-    const round = tournament.bracket.find(r => r.matches.some(m => m.matchId === match.matchId));
-    const matchInDB = round?.matches.find(m => m.matchId === match.matchId);
-    if (matchInDB) {
-        matchInDB.roomId = roomId;
-        // Сохраняем изменения в базе данных
-        await Tournament.findByIdAndUpdate(tournament._id, tournament);
-        console.log(`[Tournament] Saved roomId ${roomId} to database for match ${match.matchId}`);
-    }
-
-    // Оповещаем всех реальных игроков из исходного матча
-    for (const player of match.players) {
-        if (!player.isBot) {
-            console.log(`[Tournament] Processing real player: ${player.username} (${player._id})`);
-            
-            // Ищем активный сокет игрока
-            const socketId = userSocketMap[player._id.toString()];
-            if (socketId) {
-                const socket = io.sockets.sockets.get(socketId);
-                if (socket) {
-                    socket.join(roomId);
-                    console.log(`[Tournament] Player ${player.username} joined room ${roomId}`);
-                    
-                    io.to(socket.id).emit('matchReady', {
-                        tournamentId: tournament._id,
-                        roomId
-                    });
-                    console.log(`[Tournament] Sent matchReady event to ${player.username}`);
-
-                    // Отправляем уведомление
-                    createNotification(io, player._id.toString(), {
-                        title: `⚔️ Ваш матч в турнире "${tournament.name}" готов!`,
-                        message: 'Переходим к игре...',
-                        link: `/tournaments/${tournament._id}`
-                    });
-                } else {
-                    console.log(`[Tournament] Socket ${socketId} not found for player ${player.username}`);
-                }
-            } else {
-                console.log(`[Tournament] No socket mapping found for player ${player.username}`);
-            }
-        }
-    }
-
-    console.log(`[Tournament] Successfully created match room ${roomId} for tournament ${tournament.name}`);
-}
+// Конфигурация ботов
+const BOT_NAMES = [
+    'AlphaBot', 'BetaBot', 'GammaBot', 'DeltaBot', 'EpsilonBot',
+    'ZetaBot', 'EtaBot', 'ThetaBot', 'IotaBot', 'KappaBot',
+    'LambdaBot', 'MuBot', 'NuBot', 'XiBot', 'OmicronBot',
+    'PiBot', 'RhoBot', 'SigmaBot', 'TauBot', 'UpsilonBot'
+];
 
 /**
- * Обрабатывает результат завершенного матча, продвигает победителя и запускает следующие матчи.
+ * Создает новый турнир
  */
-export async function advanceTournamentWinner(io: Server, tournamentId: string, matchId: number, winnerData: any) {
+export async function createTournament(
+    io: Server,
+    name: string,
+    gameType: string,
+    maxPlayers: number,
+    entryFee: number,
+    prizePool: number,
+    platformCommission: number = 10
+): Promise<ITournament | null> {
     try {
-        const tournament = await Tournament.findById(tournamentId);
+        console.log(`[Tournament] Creating tournament: ${name}, ${gameType}, ${maxPlayers} players`);
+
+        // Проверяем валидность параметров
+        if (![4, 8, 16, 32].includes(maxPlayers)) {
+            throw new Error('Количество игроков должно быть 4, 8, 16 или 32');
+        }
+
+        if (!['checkers', 'chess', 'backgammon', 'tic-tac-toe'].includes(gameType)) {
+            throw new Error('Неподдерживаемый тип игры');
+        }
+
+        // Создаем турнир
+        const tournament = new Tournament({
+            name,
+            gameType,
+            maxPlayers,
+            entryFee,
+            prizePool,
+            platformCommission,
+            status: 'WAITING',
+            players: [],
+            bracket: [],
+            createdAt: new Date(),
+            firstRegistrationTime: null
+        });
+
+        await tournament.save();
+
+        // Добавляем в память
+        activeTournaments[tournament._id.toString()] = tournament;
+
+        // Уведомляем всех о новом турнире
+        io.emit('tournamentCreated', tournament);
+
+        console.log(`[Tournament] Created tournament ${tournament._id}`);
+        return tournament;
+    } catch (error) {
+        console.error(`[Tournament] Error creating tournament:`, error);
+        return null;
+    }
+}
+
+/**
+ * Регистрирует игрока в турнире
+ */
+export async function registerPlayerInTournament(
+    io: Server,
+    tournamentId: string,
+    userId: string,
+    socketId: string
+): Promise<{ success: boolean; message: string }> {
+    try {
+        console.log(`[Tournament] Registering player ${userId} in tournament ${tournamentId}`);
+
+        const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
+        if (!tournament) {
+            return { success: false, message: 'Турнир не найден' };
+        }
+
+        if (tournament.status !== 'WAITING') {
+            return { success: false, message: 'Турнир уже начался или завершен' };
+        }
+
+        // Проверяем, не зарегистрирован ли игрок уже
+        if (tournament.players.some(p => p._id === userId)) {
+            return { success: false, message: 'Вы уже зарегистрированы в этом турнире' };
+        }
+
+        // Проверяем лимит игроков
+        if (tournament.players.length >= tournament.maxPlayers) {
+            return { success: false, message: 'Турнир заполнен' };
+        }
+
+        // Получаем данные пользователя
+        const user = await User.findById(userId);
+        if (!user) {
+            return { success: false, message: 'Пользователь не найден' };
+        }
+
+        // Проверяем баланс
+        if (user.balance < tournament.entryFee) {
+            return { success: false, message: 'Недостаточно средств для участия' };
+        }
+
+        // Списываем взнос
+        user.balance -= tournament.entryFee;
+        await user.save();
+
+        // Создаем транзакцию
+        await new Transaction({
+            user: userId,
+            type: 'TOURNAMENT_FEE',
+            amount: -tournament.entryFee
+        }).save();
+
+        // Добавляем игрока
+        const player: ITournamentPlayer = {
+            _id: userId,
+            username: user.username,
+            socketId,
+            isBot: false,
+            registeredAt: new Date()
+        };
+
+        tournament.players.push(player);
+
+        // Устанавливаем время первой регистрации
+        if (!tournament.firstRegistrationTime) {
+            tournament.firstRegistrationTime = new Date();
+            
+            // Запускаем 15-секундный таймер
+            const timer = setTimeout(() => {
+                startTournamentWithBots(io, tournamentId);
+            }, 15000);
+            
+            tournamentTimers[tournamentId] = timer;
+            console.log(`[Tournament] Started 15-second timer for tournament ${tournamentId}`);
+        }
+
+        // Сохраняем изменения
+        await tournament.save();
+        activeTournaments[tournamentId] = tournament;
+
+        // Уведомляем всех об обновлении
+        io.emit('tournamentUpdated', tournament);
+
+        // Уведомляем игрока
+        await createNotification(io, userId, {
+            title: `🎯 Регистрация в турнире "${tournament.name}"`,
+            message: `Вы успешно зарегистрированы! Игроков: ${tournament.players.length}/${tournament.maxPlayers}`,
+            link: `/tournament/${tournamentId}`
+        });
+
+        console.log(`[Tournament] Player ${user.username} registered in tournament ${tournamentId}`);
+
+        // Проверяем, заполнен ли турнир
+        if (tournament.players.length === tournament.maxPlayers) {
+            // Отменяем таймер и сразу запускаем турнир
+            if (tournamentTimers[tournamentId]) {
+                clearTimeout(tournamentTimers[tournamentId]);
+                delete tournamentTimers[tournamentId];
+            }
+            await startTournament(io, tournamentId);
+        }
+
+        return { success: true, message: 'Успешно зарегистрированы в турнире' };
+    } catch (error) {
+        console.error(`[Tournament] Error registering player:`, error);
+        return { success: false, message: 'Ошибка регистрации в турнире' };
+    }
+}
+
+/**
+ * Запускает турнир с заполнением ботами
+ */
+async function startTournamentWithBots(io: Server, tournamentId: string): Promise<void> {
+    try {
+        console.log(`[Tournament] Starting tournament ${tournamentId} with bots`);
+
+        const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
+        if (!tournament || tournament.status !== 'WAITING') {
+            console.log(`[Tournament] Tournament ${tournamentId} not found or not waiting`);
+            return;
+        }
+
+        // Очищаем таймер
+        if (tournamentTimers[tournamentId]) {
+            clearTimeout(tournamentTimers[tournamentId]);
+            delete tournamentTimers[tournamentId];
+        }
+
+        // Заполняем ботами до нужного количества
+        const botsNeeded = tournament.maxPlayers - tournament.players.length;
+        if (botsNeeded > 0) {
+            const usedBotNames = new Set();
+            
+            for (let i = 0; i < botsNeeded; i++) {
+                let botName;
+                do {
+                    botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+                } while (usedBotNames.has(botName));
+                
+                usedBotNames.add(botName);
+
+                const botPlayer: ITournamentPlayer = {
+                    _id: new Types.ObjectId().toString(),
+                    username: botName,
+                    socketId: 'bot',
+                    isBot: true,
+                    registeredAt: new Date()
+                };
+
+                tournament.players.push(botPlayer);
+            }
+
+            console.log(`[Tournament] Added ${botsNeeded} bots to tournament ${tournamentId}`);
+        }
+
+        await startTournament(io, tournamentId);
+    } catch (error) {
+        console.error(`[Tournament] Error starting tournament with bots:`, error);
+    }
+}
+
+/**
+ * Запускает турнир
+ */
+async function startTournament(io: Server, tournamentId: string): Promise<void> {
+    try {
+        console.log(`[Tournament] Starting tournament ${tournamentId}`);
+
+        const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
+        if (!tournament || tournament.status !== 'WAITING') {
+            console.log(`[Tournament] Tournament ${tournamentId} not found or not waiting`);
+            return;
+        }
+
+        // Перемешиваем игроков для случайной сетки
+        const shuffledPlayers = [...tournament.players].sort(() => Math.random() - 0.5);
+
+        // Создаем турнирную сетку
+        const bracket = createTournamentBracket(shuffledPlayers);
+        tournament.bracket = bracket;
+        tournament.status = 'ACTIVE';
+        tournament.startedAt = new Date();
+
+        // Сохраняем изменения
+        await tournament.save();
+        activeTournaments[tournamentId] = tournament;
+
+        // Уведомляем всех о начале турнира
+        io.emit('tournamentStarted', tournament);
+
+        // Уведомляем игроков
+        for (const player of tournament.players) {
+            if (!player.isBot) {
+                await createNotification(io, player._id, {
+                    title: `🚀 Турнир "${tournament.name}" начался!`,
+                    message: `Игра: ${tournament.gameType}. Удачи в первом раунде!`,
+                    link: `/tournament/${tournamentId}`
+                });
+            }
+        }
+
+        console.log(`[Tournament] Tournament ${tournamentId} started with ${tournament.players.length} players`);
+
+        // Создаем матчи первого раунда
+        await createFirstRoundMatches(io, tournament);
+    } catch (error) {
+        console.error(`[Tournament] Error starting tournament:`, error);
+    }
+}
+
+/**
+ * Создает турнирную сетку
+ */
+function createTournamentBracket(players: ITournamentPlayer[]): any[] {
+    const bracket = [];
+    const totalPlayers = players.length;
+    let currentRoundPlayers = [...players];
+    let roundNumber = 1;
+
+    while (currentRoundPlayers.length > 1) {
+        const matches = [];
+        const nextRoundPlayers: ITournamentPlayer[] = [];
+
+        // Создаем пары для текущего раунда
+        for (let i = 0; i < currentRoundPlayers.length; i += 2) {
+            const player1 = currentRoundPlayers[i];
+            const player2 = currentRoundPlayers[i + 1];
+
+            const match: ITournamentMatch = {
+                matchId: new Types.ObjectId(),
+                player1,
+                player2,
+                winner: undefined,
+                status: roundNumber === 1 ? 'PENDING' : 'WAITING'
+            };
+
+            matches.push(match);
+            // Добавляем временного игрока для следующего раунда (будет заменен на победителя)
+            nextRoundPlayers.push({
+                _id: 'temp',
+                username: 'TBD',
+                socketId: 'temp',
+                isBot: false,
+                registeredAt: new Date()
+            });
+        }
+
+        bracket.push({
+            round: roundNumber,
+            matches
+        });
+
+        currentRoundPlayers = nextRoundPlayers;
+        roundNumber++;
+    }
+
+    return bracket;
+}
+
+/**
+ * Создает матчи первого раунда
+ */
+async function createFirstRoundMatches(io: Server, tournament: ITournament): Promise<void> {
+    try {
+        console.log(`[Tournament] Creating first round matches for tournament ${tournament._id}`);
+
+        const firstRound = tournament.bracket[0];
+        if (!firstRound) {
+            console.error(`[Tournament] No first round found for tournament ${tournament._id}`);
+            return;
+        }
+
+        // Создаем турнирные комнаты для каждого матча
+        for (const match of firstRound.matches) {
+            const players = [
+                {
+                    _id: match.player1._id,
+                    username: match.player1.username,
+                    socketId: match.player1.socketId,
+                    isBot: match.player1.isBot
+                },
+                {
+                    _id: match.player2._id,
+                    username: match.player2.username,
+                    socketId: match.player2.socketId,
+                    isBot: match.player2.isBot
+                }
+            ];
+
+            const room = await createTournamentRoom(
+                io,
+                tournament._id.toString(),
+                match.matchId.toString(),
+                tournament.gameType,
+                players
+            );
+
+            if (room) {
+                match.status = 'ACTIVE';
+                console.log(`[Tournament] Created room for match ${match.matchId}`);
+
+                // Если оба игрока боты, запускаем автоматическую игру
+                if (match.player1.isBot && match.player2.isBot) {
+                    setTimeout(() => {
+                        simulateBotVsBotMatch(io, room, tournament);
+                    }, 2000 + Math.random() * 3000); // 2-5 секунд задержки
+                }
+            }
+        }
+
+        // Сохраняем изменения
+        await tournament.save();
+        activeTournaments[tournament._id.toString()] = tournament;
+
+        // Уведомляем об обновлении
+        io.emit('tournamentUpdated', tournament);
+
+        console.log(`[Tournament] Created ${firstRound.matches.length} matches for first round`);
+    } catch (error) {
+        console.error(`[Tournament] Error creating first round matches:`, error);
+    }
+}
+
+/**
+ * Симулирует матч между ботами
+ */
+async function simulateBotVsBotMatch(io: Server, room: any, tournament: ITournament): Promise<void> {
+    try {
+        console.log(`[Tournament] Simulating bot vs bot match ${room.matchId}`);
+
+        // Случайно выбираем победителя
+        const winner = room.players[Math.floor(Math.random() * room.players.length)];
+
+        // Имитируем время игры (30-120 секунд)
+        const gameTime = 30000 + Math.random() * 90000;
+
+        setTimeout(async () => {
+            // Обновляем статус комнаты
+            room.status = 'FINISHED';
+            room.winner = winner;
+
+            // Уведомляем о завершении матча
+            io.to(`tournament-${room.matchId}`).emit('tournamentGameEnd', {
+                matchId: room.matchId,
+                winner,
+                isDraw: false
+            });
+
+            // Продвигаем победителя
+            await advanceTournamentWinner(io, tournament._id.toString(), room.matchId, winner);
+
+            console.log(`[Tournament] Bot match ${room.matchId} finished, winner: ${winner.username}`);
+        }, gameTime);
+    } catch (error) {
+        console.error(`[Tournament] Error simulating bot match:`, error);
+    }
+}
+
+/**
+ * Продвигает победителя в следующий раунд
+ */
+export async function advanceTournamentWinner(
+    io: Server,
+    tournamentId: string,
+    matchId: string,
+    winner: any
+): Promise<void> {
+    try {
+        console.log(`[Tournament] Advancing winner ${winner.username} in tournament ${tournamentId}`);
+
+        const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
         if (!tournament || tournament.status !== 'ACTIVE') {
             console.log(`[Tournament] Tournament ${tournamentId} not found or not active`);
             return;
         }
 
+        // Находим матч и записываем победителя
         let currentRoundIndex = -1;
-        let currentMatchIndex = -1;
+        let matchIndex = -1;
 
-        // 1. Находим матч и обновляем победителя
         for (let i = 0; i < tournament.bracket.length; i++) {
-            const matchIndex = tournament.bracket[i].matches.findIndex(m => m.matchId === matchId);
-            if (matchIndex !== -1) {
+            const round = tournament.bracket[i];
+            const foundMatchIndex = round.matches.findIndex(m => m.matchId.toString() === matchId);
+            if (foundMatchIndex !== -1) {
                 currentRoundIndex = i;
-                currentMatchIndex = matchIndex;
-                
-                // Проверяем, что победитель еще не записан
-                if (!tournament.bracket[i].matches[matchIndex].winner) {
-                    tournament.bracket[i].matches[matchIndex].winner = winnerData;
-                    console.log(`[Tournament] Match ${matchId} winner: ${winnerData.username || winnerData._id}`);
-                } else {
-                    console.log(`[Tournament] Match ${matchId} already has a winner, skipping`);
-                    return;
-                }
+                matchIndex = foundMatchIndex;
                 break;
             }
         }
 
-        if (currentRoundIndex === -1) {
-            console.log(`[Tournament] Match ${matchId} not found in tournament ${tournamentId}`);
+        if (currentRoundIndex === -1 || matchIndex === -1) {
+            console.log(`[Tournament] Match ${matchId} not found in tournament bracket`);
             return;
         }
 
-        // 2. Проверяем, завершен ли текущий раунд
+        const match = tournament.bracket[currentRoundIndex].matches[matchIndex];
+        match.winner = winner;
+        match.status = 'FINISHED';
+
+        // Проверяем, завершен ли текущий раунд
         const currentRound = tournament.bracket[currentRoundIndex];
-        const allMatchesFinished = currentRound.matches.every(m => m.winner);
-        
-        if (!allMatchesFinished) {
-            await tournament.save();
-            io.emit('tournamentUpdated', { tournamentId });
-            console.log(`[Tournament] Round ${currentRoundIndex + 1} not finished yet`);
-            return;
+        const allMatchesFinished = currentRound.matches.every(m => m.status === 'FINISHED');
+
+        if (allMatchesFinished) {
+            console.log(`[Tournament] Round ${currentRound.round} finished`);
+            
+            // Логика создания следующего раунда и завершения турнира
+            // теперь обрабатывается в tournamentRoom.service.ts
+            console.log(`[Tournament] Round processing will be handled by tournament room service`);
         }
 
-        // 3. Раунд завершен. Готовим следующий или завершаем турнир.
-        const winners = currentRound.matches.map(m => m.winner!);
-        console.log(`[Tournament] Round ${currentRoundIndex + 1} finished. Winners:`, winners.map(w => w.username));
-
-        if (winners.length === 1) {
-            // Это был финал
-            tournament.status = 'FINISHED';
-            const tournamentWinner = winners[0];
-            
-            // Награждаем победителя (только если это не бот)
-            if (!tournamentWinner.isBot && tournamentWinner._id) {
-                await User.findByIdAndUpdate(tournamentWinner._id, {
-                    $inc: { balance: tournament.prizePool }
-                });
-                await Transaction.create({
-                    user: tournamentWinner._id,
-                    type: 'TOURNAMENT_WINNINGS',
-                    amount: tournament.prizePool
-                });
-                await createNotification(io, tournamentWinner._id.toString(), {
-                    title: '🏆 Победа в турнире!',
-                    message: `Вы выиграли ${tournament.prizePool}$ в турнире "${tournament.name}"!`
-                });
-            }
-            
-            console.log(`[Tournament] ${tournament.name} finished. Winner: ${tournamentWinner.username}, Prize: ${tournament.prizePool}$`);
-            
-            console.log(`[Tournament] ${tournament.name} finished. Winner: ${tournamentWinner.username}`);
-        } else {
-            // Создаем следующий раунд
-            const nextRoundMatches = [];
-            for (let i = 0; i < winners.length; i += 2) {
-                const matchId = Date.now() + Math.random(); // Уникальный ID
-                nextRoundMatches.push({
-                    matchId: Math.floor(matchId),
-                    players: [winners[i], winners[i + 1]],
-                    winner: undefined,
-                    roomId: undefined
-                });
-            }
-            
-            const roundNames = ['Round 1', 'Quarter-finals', 'Semi-finals', 'Final'];
-            const roundName = roundNames[currentRoundIndex + 1] || `Round ${currentRoundIndex + 2}`;
-            
-            tournament.bracket.push({
-                roundName,
-                matches: nextRoundMatches
-            });
-            
-            console.log(`[Tournament] Created ${roundName} with ${nextRoundMatches.length} matches`);
-            
-            // Сразу создаем игровые комнаты для нового раунда
-            for (const match of nextRoundMatches) {
-                await createTournamentMatchRoom(io, tournament, match);
-            }
-        }
-
+        // Сохраняем изменения
         await tournament.save();
-        io.emit('tournamentUpdated', { tournamentId });
-        
+        activeTournaments[tournamentId] = tournament;
+
+        // Уведомляем об обновлении
+        io.emit('tournamentUpdated', tournament);
+
+        console.log(`[Tournament] Winner ${winner.username} advanced in tournament ${tournamentId}`);
     } catch (error) {
-        console.error(`[Tournament] Error in advanceTournamentWinner:`, error);
+        console.error(`[Tournament] Error advancing winner:`, error);
     }
 }
 
+// Функции createNextRoundMatches, finishTournament, distributePrizes и awardPrize
+// перенесены в tournamentRoom.service.ts для избежания дублирования
+
 /**
- * Основная функция, которая запускает турнир
+ * Получает список активных турниров
  */
-export async function startTournament(tournamentId: string, io: Server) {
+export async function getActiveTournaments(): Promise<ITournament[]> {
     try {
-        const tournament = await Tournament.findById(tournamentId).populate('players');
-        if (!tournament || tournament.status !== 'REGISTERING') {
-            console.log(`[Tournament] Cannot start tournament ${tournamentId} - not found or not in REGISTERING status`);
-            return;
-        }
-        
-        console.log(`[Tournament Service] Starting tournament ${tournament.name} with ${tournament.players.length} real players`);
+        const tournaments = await Tournament.find({
+            status: { $in: ['WAITING', 'ACTIVE'] }
+        }).sort({ createdAt: -1 });
 
-        // Добавляем ботов до нужного количества
-        const neededBots = tournament.maxPlayers - tournament.players.length;
-        const botPlayers: ITournamentPlayer[] = Array.from({ length: neededBots }, (_, i) => ({
-            _id: `bot-${Date.now()}-${i}`,
-            isBot: true,
-            username: botUsernames[Math.floor(Math.random() * botUsernames.length)] + `_Bot${i + 1}`,
-        }));
-        
-        console.log(`[Tournament Service] Adding ${neededBots} bots to fill tournament`);
-
-        // Преобразуем реальных игроков в ITournamentPlayer
-        const realPlayers: ITournamentPlayer[] = await Promise.all(
-            tournament.players.map(async (playerId) => {
-                const user = await User.findById(playerId).select('username');
-                return {
-                    _id: playerId.toString(),
-                    username: user?.username || 'Unknown',
-                    isBot: false
-                };
-            })
-        );
-
-        const allParticipants = [...realPlayers, ...botPlayers];
-        shuffleArray(allParticipants);
-
-        // Создаем первый раунд
-        const matches = [];
-        for (let i = 0; i < allParticipants.length; i += 2) {
-            matches.push({
-                matchId: Math.floor(Date.now() + Math.random() + i),
-                players: [allParticipants[i], allParticipants[i + 1]],
-                winner: undefined,
-                roomId: undefined
-            });
-        }
-
-        tournament.bracket = [{ roundName: 'Round 1', matches }];
-        tournament.status = 'ACTIVE';
-        
-        // Создаем игровые комнаты для первого раунда
-        for (const match of tournament.bracket[0].matches) {
-            await createTournamentMatchRoom(io, tournament, match);
-        }
-        
-        await tournament.save();
-        io.emit('tournamentUpdated', { tournamentId: tournament._id });
-        
-        console.log(`[Tournament] Successfully started tournament ${tournament.name}`);
-        
+        return tournaments;
     } catch (error) {
-        console.error(`[Tournament] Error starting tournament ${tournamentId}:`, error);
+        console.error(`[Tournament] Error getting active tournaments:`, error);
+        return [];
     }
 }
 
 /**
- * Инициализация системы турниров
+ * Получает турнир по ID
  */
-export const initializeTournamentScheduler = (io: Server) => {
-    // Очищаем старые турниры в статусе REGISTERING без игроков
-    cron.schedule('0 */6 * * *', async () => { // Каждые 6 часов
-        try {
-            const oldTournaments = await Tournament.find({
-                status: 'REGISTERING',
-                players: { $size: 0 },
-                createdAt: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Старше 24 часов
-            });
-            
-            for (const tournament of oldTournaments) {
-                await Tournament.findByIdAndDelete(tournament._id);
-                console.log(`[Tournament] Cleaned up old empty tournament: ${tournament.name}`);
-            }
-        } catch (error) {
-            console.error('[Tournament Cleanup] Error:', error);
+export async function getTournamentById(tournamentId: string): Promise<ITournament | null> {
+    try {
+        const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
+        return tournament;
+    } catch (error) {
+        console.error(`[Tournament] Error getting tournament:`, error);
+        return null;
+    }
+}
+
+/**
+ * Очищает завершенные турниры из памяти
+ */
+export function cleanupFinishedTournaments(): void {
+    Object.keys(activeTournaments).forEach(tournamentId => {
+        const tournament = activeTournaments[tournamentId];
+        if (tournament.status === 'FINISHED') {
+            delete activeTournaments[tournamentId];
+            console.log(`[Tournament] Cleaned up finished tournament ${tournamentId}`);
         }
     });
-    
-    console.log('[Tournament System] Initialized with instant matchmaking');
-};
+}
+
+// Запускаем очистку каждые 30 минут
+setInterval(cleanupFinishedTournaments, 30 * 60 * 1000);

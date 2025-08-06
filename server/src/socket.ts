@@ -9,7 +9,11 @@ import { checkersLogic } from './games/checkers.logic'; // 1. ИМПОРТИРУ
 import { chessLogic } from './games/chess.logic';
 import { backgammonLogic, rollDiceForBackgammon } from './games/backgammon.logic';
 import { advanceTournamentWinner } from './services/tournament.service';
-// import { advanceTournamentWinner } from './services/tournament.service';
+import {
+    joinTournamentRoom,
+    processTournamentMove,
+    tournamentPlayerSockets
+} from './services/tournamentRoom.service';
 
 
 
@@ -90,51 +94,8 @@ function formatGameNameForDB(gameType: string): 'Checkers' | 'Chess' | 'Backgamm
 async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolean = false) {
     console.log(`[EndGame] Room: ${room.id}, Winner: ${winnerId}, Draw: ${isDraw}`);
     
-    // Обработка турнирных игр
-    if (room.id.startsWith('tourney-')) {
-        const [, tournamentId, , matchIdStr] = room.id.split('-');
-        const matchId = parseInt(matchIdStr, 10);
-        
-        let winnerObject = null;
-        if (winnerId && !isDraw) {
-            // @ts-ignore
-            const winnerPlayer = room.players.find(p => p.user._id.toString() === winnerId);
-            if (winnerPlayer) {
-                winnerObject = {
-                    // @ts-ignore
-                    _id: winnerPlayer.user._id.toString(),
-                    username: winnerPlayer.user.username,
-                    isBot: isBot(winnerPlayer)
-                };
-            }
-        }
-        
-        // Уведомляем игроков о результате
-        io.to(room.id).emit('gameEnd', {
-            winner: winnerObject ? { user: winnerObject } : null,
-            isDraw
-        });
-        
-        // Продвигаем победителя в турнире
-        if (winnerObject) {
-            console.log(`[Tournament] Advancing winner: ${winnerObject.username} in tournament ${tournamentId}`);
-            advanceTournamentWinner(io, tournamentId, matchId, winnerObject);
-        } else if (isDraw) {
-            // В случае ничьи в турнире, выбираем случайного победителя
-            const randomWinner = room.players[Math.floor(Math.random() * room.players.length)];
-            const randomWinnerObject = {
-                // @ts-ignore
-                _id: randomWinner.user._id.toString(),
-                username: randomWinner.user.username,
-                isBot: isBot(randomWinner)
-            };
-            console.log(`[Tournament] Draw resolved randomly, winner: ${randomWinnerObject.username}`);
-            advanceTournamentWinner(io, tournamentId, matchId, randomWinnerObject);
-        }
-        
-        delete rooms[room.id];
-        return;
-    }
+    // Обработка турнирных игр теперь происходит в tournamentRoom.service.ts
+    // Здесь обрабатываем только обычные лобби-игры
 
     // Обработка обычных игр
     if (!room) return;
@@ -267,58 +228,23 @@ export const initializeSocket = (io: Server) => {
             socket.leave(`lobby-${gameType}`);
         });
 
-        socket.on('joinTournamentGame', (roomId: string) => {
-            console.log(`[Tournament] Player ${initialUser.username} joining tournament game ${roomId}`);
-            const room = rooms[roomId];
+        // Новая логика подключения к турнирным играм
+        socket.on('joinTournamentGame', async (matchId: string) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            const success = await joinTournamentRoom(io, socket, matchId, userId);
             
-            if (!room) {
-                console.log(`[Tournament] Room ${roomId} not found`);
-                socket.emit('error', { message: 'Tournament match not found' });
-                return;
+            if (success) {
+                // Сохраняем связь игрока с сокетом для турниров
+                tournamentPlayerSockets[userId] = socket.id;
             }
-            
-            // Проверяем, что игрок участвует в этом матче
-            const isPlayerInMatch = room.players.some(p =>
-                // @ts-ignore
-                p.user._id.toString() === initialUser._id.toString()
-            );
-            
-            if (!isPlayerInMatch) {
-                console.log(`[Tournament] Player ${initialUser.username} not in match ${roomId}`);
-                socket.emit('error', { message: 'You are not a participant in this match' });
-                return;
-            }
-            
-            // Обновляем socketId игрока
-            const playerInRoom = room.players.find(p =>
-                // @ts-ignore
-                p.user._id.toString() === initialUser._id.toString()
-            );
-            if (playerInRoom && playerInRoom.socketId !== socket.id) {
-                console.log(`[Tournament] Updating socketId for player ${initialUser.username} from ${playerInRoom.socketId} to ${socket.id}`);
-                playerInRoom.socketId = socket.id;
-            }
-            
-            socket.join(roomId);
-            console.log(`[Tournament] Player ${initialUser.username} joined room ${roomId}`);
-            
-            // Отправляем текущее состояние игры всем в комнате
-            io.to(roomId).emit('gameStart', getPublicRoomState(room));
-            
-            // Проверяем, все ли реальные игроки подключились
-            const realPlayers = room.players.filter(p => !isBot(p));
-            const connectedRealPlayers = realPlayers.filter(p => {
-                const socketExists = io.sockets.sockets.has(p.socketId);
-                console.log(`[Tournament] Player ${p.user.username} socket ${p.socketId} exists: ${socketExists}`);
-                return socketExists;
-            });
-            
-            console.log(`[Tournament] Connected real players: ${connectedRealPlayers.length}/${realPlayers.length}`);
-            
-            if (connectedRealPlayers.length === realPlayers.length && realPlayers.length > 0) {
-                console.log(`[Tournament] All players connected to match ${roomId}, broadcasting game update`);
-                io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
-            }
+        });
+
+        // Обработка ходов в турнирных играх
+        socket.on('tournamentMove', async ({ matchId, move }: { matchId: string, move: any }) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            await processTournamentMove(io, socket, matchId, userId, move);
         });
 
         // --- ОБРАБОТЧИК ДЛЯ БРОСКА КОСТЕЙ В НАРДАХ ---

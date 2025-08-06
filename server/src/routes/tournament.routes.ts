@@ -1,11 +1,28 @@
 import { Router } from 'express';
-import { getAllTournaments, getTournamentDetails, registerInTournament  } from '../controllers/tournament.controller';
+import { 
+    getAllTournaments, 
+    getTournament, 
+    createNewTournament,
+    registerInTournament,
+    unregisterFromTournament,
+    getPlayerTournaments,
+    getTournamentHistory,
+    getTournamentStats
+} from '../controllers/tournament.controller';
 import { protect } from '../middleware/auth.middleware';
 
 const router = Router();
 
+// Публичные роуты
 router.route('/').get(getAllTournaments);
-router.route('/:id').get(getTournamentDetails);
-router.route('/:id/register').post(protect, registerInTournament); // Новый защищенный роут
+router.route('/history').get(getTournamentHistory);
+router.route('/stats').get(getTournamentStats);
+router.route('/:tournamentId').get(getTournament);
+
+// Защищенные роуты (требуют авторизации)
+router.route('/').post(protect, createNewTournament);
+router.route('/player').get(protect, getPlayerTournaments);
+router.route('/:tournamentId/register').post(protect, registerInTournament);
+router.route('/:tournamentId/register').delete(protect, unregisterFromTournament);
 
 export default router;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { getTournaments, ITournament } from '../../services/tournamentService';
+import { Tournament, tournamentService } from '../../services/tournamentService';
 import axios from 'axios';
 import { Trophy, Target, DollarSign, Clock, Users } from 'lucide-react';
 import styles from './DashboardPage.module.css';
@@ -19,7 +19,7 @@ const DashboardPage: React.FC = () => {
     const { user } = useAuth();
     const [stats, setStats] = useState({ totalGames: 0, winRate: 0, hoursPlayed: 0, totalWinnings: 0 });
     const [recentGames, setRecentGames] = useState<IGameHistory[]>([]);
-    const [upcomingTournaments, setUpcomingTournaments] = useState<ITournament[]>([]);
+    const [upcomingTournaments, setUpcomingTournaments] = useState<Tournament[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,7 +27,7 @@ const DashboardPage: React.FC = () => {
             try {
                 const [gamesHistoryRes, tournamentsRes] = await Promise.all([
                     axios.get<any[]>(`${API_URL}/api/users/history/games`),
-                    getTournaments()
+                    tournamentService.getActiveTournaments()
                 ]);
 
                 const gamesHistory = gamesHistoryRes.data;
@@ -38,7 +38,7 @@ const DashboardPage: React.FC = () => {
                 
                 setStats({ totalGames, winRate, hoursPlayed: 234, totalWinnings }); // "Часы" пока заглушка
                 setRecentGames(gamesHistory.slice(0, 4));
-                setUpcomingTournaments(tournamentsRes.filter(t => t.status === 'REGISTERING').slice(0, 3));
+                setUpcomingTournaments(tournamentsRes.filter(t => t.status === 'WAITING').slice(0, 3));
             } catch (error) {
                 console.error("Failed to load data for dashboard:", error);
             } finally {
@@ -128,7 +128,7 @@ const DashboardPage: React.FC = () => {
                                     <span>${tournament.prizePool}</span>
                                 </div>
                                 <div className={styles.tournamentItemFooter}>
-                                    <span>{new Date(tournament.startTime).toLocaleDateString()}</span>
+                                    <span>{new Date(tournament.createdAt).toLocaleDateString()}</span>
                                     <div><Users size={16} /><span>{tournament.players.length}/{tournament.maxPlayers} players</span></div>
                                 </div>
                             </Link>

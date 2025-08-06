@@ -4,7 +4,6 @@ import http from 'http';
 import { Server } from 'socket.io'; // Импортируем Server из socket.io
 import { initializeSocket, rooms, gameLogics } from './socket'; // Экспортируем rooms и gameLogics
 import { setSocketData } from './controllers/admin.controller'
-import { initializeTournamentScheduler } from './services/tournament.service'; // 1. Импорт
 
 // Подключение к базе данных
 connectDB();
@@ -28,8 +27,6 @@ initializeSocket(io);
 // Передаем ссылки на rooms и gameLogics в админ-контроллер
 setSocketData(rooms, gameLogics);
 
-// 2. Инициализируем и запускаем наш планировщик турниров
-initializeTournamentScheduler(io);
 
 // Передаем экземпляр io в Express приложение
 app.set('io', io);

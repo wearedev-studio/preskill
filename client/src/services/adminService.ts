@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { ITournament } from './tournamentService';
+import { Tournament } from './tournamentService';
 
 import { API_URL } from '../api/index';
 
@@ -14,7 +14,7 @@ interface TournamentCreationData {
  * Отправляет запрос на создание нового турнира
  * @param tournamentData - Данные для создания турнира
  */
-export const createTournament = async (tournamentData: TournamentCreationData): Promise<ITournament> => {
+export const createTournament = async (tournamentData: TournamentCreationData): Promise<Tournament> => {
     const { data } = await axios.post(`${API_URL}/api/admin/tournaments`, tournamentData);
     return data;
 };

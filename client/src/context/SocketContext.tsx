@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { API_URL } from '../api/index';
+import { useNavigate } from 'react-router-dom';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -20,6 +21,22 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
           token: token,
         },
       });
+
+      // Обработчик автоматического перенаправления к турнирным играм
+      newSocket.on('tournamentMatchReady', (data: {
+        tournamentId: string;
+        matchId: string;
+        gameType: string;
+        opponent: any;
+      }) => {
+        console.log('[Tournament] Match ready, redirecting to game:', data);
+        
+        // Автоматически перенаправляем игрока к турнирной игре
+        setTimeout(() => {
+          window.location.href = `/tournament-game/${data.matchId}`;
+        }, 2000); // 2 секунды задержки для показа уведомления
+      });
+
       setSocket(newSocket);
 
       return () => {

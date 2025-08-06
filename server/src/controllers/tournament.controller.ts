@@ -2,122 +2,289 @@ import { Request, Response } from 'express';
 import { Server } from 'socket.io';
 import Tournament from '../models/Tournament.model';
 import User from '../models/User.model';
-import Transaction from '../models/Transaction.model';
-
-// Получение всех турниров
-export const getAllTournaments = async (req: Request, res: Response) => {
-    try {
-        const tournaments = await Tournament.find({}).sort({ startTime: 1 });
-        res.json(tournaments);
-    } catch (error: any) {
-        res.status(500).json({ message: 'Ошибка сервера' });
-    }
-};
-
-// Получение одного турнира по ID
-export const getTournamentDetails = async (req: Request, res: Response) => {
-    try {
-        const tournament = await Tournament.findById(req.params.id).populate('players', 'username');
-        if (tournament) {
-            res.json(tournament);
-        } else {
-            res.status(404).json({ message: 'Турнир не найден' });
-        }
-    } catch (error: any) {
-        res.status(500).json({ message: 'Ошибка сервера' });
-    }
-};
-
-// Хранилище активных таймеров турниров
-const tournamentTimers = new Map<string, NodeJS.Timeout>();
+import { 
+    createTournament, 
+    registerPlayerInTournament, 
+    getActiveTournaments, 
+    getTournamentById 
+} from '../services/tournament.service';
 
 /**
- * Регистрация текущего пользователя в турнире
+ * Получить список всех турниров
+ */
+export const getAllTournaments = async (req: Request, res: Response) => {
+    try {
+        const tournaments = await getActiveTournaments();
+        res.json(tournaments);
+    } catch (error) {
+        console.error('Error fetching tournaments:', error);
+        res.status(500).json({ message: 'Ошибка при получении списка турниров' });
+    }
+};
+
+/**
+ * Получить турнир по ID
+ */
+export const getTournament = async (req: Request, res: Response) => {
+    try {
+        const { tournamentId } = req.params;
+        const tournament = await getTournamentById(tournamentId);
+        
+        if (!tournament) {
+            return res.status(404).json({ message: 'Турнир не найден' });
+        }
+        
+        res.json(tournament);
+    } catch (error) {
+        console.error('Error fetching tournament:', error);
+        res.status(500).json({ message: 'Ошибка при получении турнира' });
+    }
+};
+
+/**
+ * Создать новый турнир
+ */
+export const createNewTournament = async (req: Request, res: Response) => {
+    try {
+        const { name, gameType, maxPlayers, entryFee, platformCommission } = req.body;
+        
+        // Валидация входных данных
+        if (!name || !gameType || !maxPlayers || entryFee === undefined) {
+            return res.status(400).json({ 
+                message: 'Необходимо указать название, тип игры, количество игроков и взнос' 
+            });
+        }
+
+        if (![4, 8, 16, 32].includes(maxPlayers)) {
+            return res.status(400).json({ 
+                message: 'Количество игроков должно быть 4, 8, 16 или 32' 
+            });
+        }
+
+        if (!['checkers', 'chess', 'backgammon', 'tic-tac-toe'].includes(gameType)) {
+            return res.status(400).json({ 
+                message: 'Неподдерживаемый тип игры' 
+            });
+        }
+
+        const io: Server = req.app.get('io');
+        const prizePool = entryFee * maxPlayers; // Базовый призовой фонд
+        
+        const tournament = await createTournament(
+            io,
+            name,
+            gameType,
+            maxPlayers,
+            entryFee,
+            prizePool,
+            platformCommission || 10
+        );
+
+        if (!tournament) {
+            return res.status(500).json({ message: 'Ошибка при создании турнира' });
+        }
+
+        res.status(201).json({
+            message: 'Турнир успешно создан',
+            tournament
+        });
+    } catch (error) {
+        console.error('Error creating tournament:', error);
+        res.status(500).json({ message: 'Ошибка при создании турнира' });
+    }
+};
+
+/**
+ * Регистрация в турнире
  */
 export const registerInTournament = async (req: Request, res: Response) => {
-    const tournamentId = req.params.id;
-    const userId = req.user!._id;
-
     try {
-        const tournament = await Tournament.findById(tournamentId);
-        const user = await User.findById(userId);
+        const { tournamentId } = req.params;
+        const userId = req.user?._id?.toString();
 
-        // --- Проверки ---
-        if (!tournament) return res.status(404).json({ message: 'Турнир не найден.' });
-        if (!user) return res.status(404).json({ message: 'Пользователь не найден.' });
-        if (tournament.status !== 'REGISTERING') return res.status(400).json({ message: 'Регистрация на этот турнир закрыта.' });
-        if (tournament.players.length >= tournament.maxPlayers) return res.status(400).json({ message: 'Турнир уже заполнен.' });
-        // @ts-ignore
-        if (tournament.players.includes(userId)) return res.status(400).json({ message: 'Вы уже зарегистрированы в этом турнире.' });
-        if (user.balance < tournament.entryFee) return res.status(400).json({ message: 'Недостаточно средств для вступительного взноса.' });
-
-        // --- Выполнение операций ---
-        // 1. Списываем баланс и создаем транзакцию
-        user.balance -= tournament.entryFee;
-        await user.save();
-        await Transaction.create({ user: userId, type: 'TOURNAMENT_FEE', amount: tournament.entryFee });
-
-        // 2. Добавляем игрока в турнир
-        // @ts-ignore
-        tournament.players.push(userId);
-        
-        // 3. Устанавливаем время первой регистрации, если это первый игрок
-        if (tournament.players.length === 1) {
-            tournament.firstRegistrationTime = new Date();
+        if (!userId) {
+            return res.status(401).json({ message: 'Необходима авторизация' });
         }
-        
-        // 4. Рассчитываем призовой фонд с учетом комиссии
-        const totalFees = tournament.entryFee * (tournament.players.length);
-        const commission = Math.floor(totalFees * (tournament.platformCommission / 100));
-        tournament.prizePool = totalFees - commission;
-        
-        await tournament.save();
-        
-        // 5. Оповещаем всех через сокеты, что данные турнира обновились
+
+        // Получаем socketId из сессии или заголовков
+        const socketId = req.headers['x-socket-id'] as string || 'offline';
+
         const io: Server = req.app.get('io');
-        io.emit('tournamentUpdated', { tournamentId });
+        
+        const result = await registerPlayerInTournament(io, tournamentId, userId, socketId);
 
-        // 6. Логика запуска турнира
-        if (tournament.players.length >= tournament.maxPlayers) {
-            // Турнир заполнен - запускаем немедленно
-            const { startTournament } = await import('../services/tournament.service');
-            
-            // Отменяем таймер, если он был установлен
-            if (tournamentTimers.has(tournamentId)) {
-                clearTimeout(tournamentTimers.get(tournamentId)!);
-                tournamentTimers.delete(tournamentId);
-            }
-            
-            setTimeout(() => {
-                startTournament(tournamentId, io);
-            }, 2000); // Небольшая задержка для обновления UI
-        } else if (tournament.players.length === 1) {
-            // Первый игрок зарегистрировался - запускаем 15-секундный таймер
-            console.log(`[Tournament] Starting 15-second timer for tournament ${tournamentId}`);
-            
-            const timer = setTimeout(async () => {
-                try {
-                    // Проверяем, что турнир все еще в статусе регистрации
-                    const currentTournament = await Tournament.findById(tournamentId);
-                    if (currentTournament && currentTournament.status === 'REGISTERING') {
-                        console.log(`[Tournament] 15-second timer expired for tournament ${tournamentId}, starting with ${currentTournament.players.length} players`);
-                        const { startTournament } = await import('../services/tournament.service');
-                        startTournament(tournamentId, io);
-                    }
-                } catch (error) {
-                    console.error(`[Tournament] Error in timer for tournament ${tournamentId}:`, error);
-                } finally {
-                    tournamentTimers.delete(tournamentId);
-                }
-            }, 15000); // 15 секунд
-            
-            tournamentTimers.set(tournamentId, timer);
+        if (!result.success) {
+            return res.status(400).json({ message: result.message });
         }
 
-        res.json({ message: 'Вы успешно зарегистрировались в турнире!' });
-
+        res.json({ message: result.message });
     } catch (error) {
-        console.error('Tournament registration error:', error);
-        res.status(500).json({ message: 'Ошибка сервера при регистрации.' });
+        console.error('Error registering in tournament:', error);
+        res.status(500).json({ message: 'Ошибка при регистрации в турнире' });
+    }
+};
+
+/**
+ * Отмена регистрации в турнире
+ */
+export const unregisterFromTournament = async (req: Request, res: Response) => {
+    try {
+        const { tournamentId } = req.params;
+        const userId = req.user?._id?.toString();
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Необходима авторизация' });
+        }
+
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament) {
+            return res.status(404).json({ message: 'Турнир не найден' });
+        }
+
+        if (tournament.status !== 'WAITING') {
+            return res.status(400).json({ message: 'Нельзя отменить регистрацию после начала турнира' });
+        }
+
+        // Проверяем, зарегистрирован ли игрок
+        const playerIndex = tournament.players.findIndex(p => p._id === userId);
+        if (playerIndex === -1) {
+            return res.status(400).json({ message: 'Вы не зарегистрированы в этом турнире' });
+        }
+
+        // Возвращаем взнос
+        const user = await User.findById(userId);
+        if (user) {
+            user.balance += tournament.entryFee;
+            await user.save();
+        }
+
+        // Удаляем игрока
+        tournament.players.splice(playerIndex, 1);
+        
+        // Сбрасываем время первой регистрации если нет игроков
+        if (tournament.players.length === 0) {
+            tournament.firstRegistrationTime = undefined;
+        }
+
+        await tournament.save();
+
+        // Уведомляем всех об обновлении
+        const io: Server = req.app.get('io');
+        io.emit('tournamentUpdated', tournament);
+
+        res.json({ message: 'Регистрация отменена, взнос возвращен' });
+    } catch (error) {
+        console.error('Error unregistering from tournament:', error);
+        res.status(500).json({ message: 'Ошибка при отмене регистрации' });
+    }
+};
+
+/**
+ * Получить турниры игрока
+ */
+export const getPlayerTournaments = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user?._id?.toString();
+
+        if (!userId) {
+            return res.status(401).json({ message: 'Необходима авторизация' });
+        }
+
+        const tournaments = await Tournament.find({
+            'players._id': userId
+        }).sort({ createdAt: -1 });
+
+        res.json(tournaments);
+    } catch (error) {
+        console.error('Error fetching player tournaments:', error);
+        res.status(500).json({ message: 'Ошибка при получении турниров игрока' });
+    }
+};
+
+/**
+ * Получить историю турниров
+ */
+export const getTournamentHistory = async (req: Request, res: Response) => {
+    try {
+        const { page = 1, limit = 10, gameType } = req.query;
+        
+        const query: any = { status: 'FINISHED' };
+        if (gameType && gameType !== 'all') {
+            query.gameType = gameType;
+        }
+
+        const tournaments = await Tournament.find(query)
+            .sort({ finishedAt: -1 })
+            .limit(Number(limit))
+            .skip((Number(page) - 1) * Number(limit));
+
+        const total = await Tournament.countDocuments(query);
+
+        res.json({
+            tournaments,
+            pagination: {
+                page: Number(page),
+                limit: Number(limit),
+                total,
+                pages: Math.ceil(total / Number(limit))
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching tournament history:', error);
+        res.status(500).json({ message: 'Ошибка при получении истории турниров' });
+    }
+};
+
+/**
+ * Получить статистику турниров
+ */
+export const getTournamentStats = async (req: Request, res: Response) => {
+    try {
+        const stats = await Tournament.aggregate([
+            {
+                $group: {
+                    _id: '$gameType',
+                    total: { $sum: 1 },
+                    active: {
+                        $sum: {
+                            $cond: [{ $in: ['$status', ['WAITING', 'ACTIVE']] }, 1, 0]
+                        }
+                    },
+                    finished: {
+                        $sum: {
+                            $cond: [{ $eq: ['$status', 'FINISHED'] }, 1, 0]
+                        }
+                    },
+                    totalPrizePool: { $sum: '$prizePool' }
+                }
+            }
+        ]);
+
+        const totalStats = await Tournament.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalTournaments: { $sum: 1 },
+                    totalPrizePool: { $sum: '$prizePool' },
+                    activeTournaments: {
+                        $sum: {
+                            $cond: [{ $in: ['$status', ['WAITING', 'ACTIVE']] }, 1, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        res.json({
+            byGameType: stats,
+            overall: totalStats[0] || {
+                totalTournaments: 0,
+                totalPrizePool: 0,
+                activeTournaments: 0
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching tournament stats:', error);
+        res.status(500).json({ message: 'Ошибка при получении статистики турниров' });
     }
 };

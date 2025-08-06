@@ -1,176 +1,387 @@
-import React, {useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getTournamentById, registerForTournament, ITournament } from '../../services/tournamentService';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Tournament, TournamentMatch, tournamentService } from '../../services/tournamentService';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import styles from './TournamentDetailPage.module.css';
-import { Trophy, Users, DollarSign, Calendar, Clock, Crown, Play } from 'lucide-react';
 
 const TournamentDetailPage: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
-    const { user, refreshUser } = useAuth();
+    const { tournamentId } = useParams<{ tournamentId: string }>();
+    const [tournament, setTournament] = useState<Tournament | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [timeUntilStart, setTimeUntilStart] = useState<number>(0);
+    
+    const { user } = useAuth();
     const { socket } = useSocket();
     const navigate = useNavigate();
-    const [tournament, setTournament] = useState<ITournament | null>(null);
-    const [activeMatchRoomId, setActiveMatchRoomId] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [isRegistered, setIsRegistered] = useState(false);
 
-    const fetchTournament = useCallback(async () => {
-        if (!id) return;
+    const statusText = {
+        WAITING: 'Ожидание игроков',
+        ACTIVE: 'Активный',
+        FINISHED: 'Завершен',
+        CANCELLED: 'Отменен'
+    };
+
+    const gameTypeText = {
+        'tic-tac-toe': 'Крестики-нолики',
+        'checkers': 'Шашки',
+        'chess': 'Шахматы',
+        'backgammon': 'Нарды'
+    };
+
+    useEffect(() => {
+        if (tournamentId) {
+            loadTournament();
+        }
+    }, [tournamentId]);
+
+    useEffect(() => {
+        if (socket && tournamentId) {
+            socket.on('tournamentUpdated', handleTournamentUpdate);
+            socket.on('tournamentStarted', handleTournamentUpdate);
+            socket.on('tournamentFinished', handleTournamentUpdate);
+            socket.on('tournamentMatchReady', handleMatchReady);
+
+            return () => {
+                socket.off('tournamentUpdated', handleTournamentUpdate);
+                socket.off('tournamentStarted', handleTournamentUpdate);
+                socket.off('tournamentFinished', handleTournamentUpdate);
+                socket.off('tournamentMatchReady', handleMatchReady);
+            };
+        }
+    }, [socket, tournamentId]);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        
+        if (tournament && tournament.status === 'WAITING') {
+            interval = setInterval(() => {
+                const timeLeft = tournamentService.getTimeUntilStart(tournament);
+                setTimeUntilStart(timeLeft);
+                
+                if (timeLeft <= 0) {
+                    clearInterval(interval);
+                }
+            }, 1000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [tournament]);
+
+    const loadTournament = async () => {
+        if (!tournamentId) return;
+        
         try {
-            const data = await getTournamentById(id);
+            setLoading(true);
+            const data = await tournamentService.getTournamentById(tournamentId);
             setTournament(data);
-            if (user) {
-                setIsRegistered(data.players.includes(user._id));
-            }
-        } catch (error) {
-            console.error("Failed to load tournament", error);
-            setError('Tournament not found.');
+            setError(null);
+        } catch (err: any) {
+            setError(err.message);
         } finally {
             setLoading(false);
         }
-    }, [id, user]);
+    };
 
-    useEffect(() => {
-        fetchTournament();
-    }, [fetchTournament]);
-
-    useEffect(() => {
-        if (!socket || !id) return;
-
-        const handleTournamentUpdate = ({ tournamentId }: { tournamentId: string }) => {
-            console.log('Tournament updated:', tournamentId);
-            if (tournamentId === id) {
-                fetchTournament();
-            }
-        };
-
-        const handleMatchReady = ({ tournamentId, roomId, playerId }: { tournamentId: string, roomId: string, playerId?: string }) => {
-            console.log('Match ready:', { tournamentId, roomId, playerId });
-            if (tournamentId === id && tournament) {
-                // Проверяем, что событие предназначено для текущего пользователя (если указан playerId)
-                if (!playerId || playerId === user?._id) {
-                    console.log('Automatically redirecting to tournament game:', roomId);
-                    // Автоматически перенаправляем игрока к турнирной игре
-                    navigate(`/game/${tournament.gameType}/${roomId}`);
-                } else {
-                    console.log('Match ready event not for current user');
-                }
-            }
-        };
-
-        socket.on('tournamentUpdated', handleTournamentUpdate);
-        socket.on('matchReady', handleMatchReady);
-        
-        return () => {
-            socket.off('tournamentUpdated', handleTournamentUpdate);
-            socket.off('matchReady', handleMatchReady);
-        };
-    }, [socket, id, fetchTournament]);
-
-    const handleRegister = async () => {
-        if (!id) return;
-        try {
-            await registerForTournament(id);
-            await refreshUser();
-            fetchTournament();
-        } catch (err: any) {
-            alert(`Ошибка регистрации: ${err.response?.data?.message || 'Попробуйте снова'}`);
+    const handleTournamentUpdate = (updatedTournament: Tournament) => {
+        if (updatedTournament._id === tournamentId) {
+            setTournament(updatedTournament);
         }
     };
 
+    const handleMatchReady = (data: { tournamentId: string; matchId: string; gameType: string }) => {
+        if (data.tournamentId === tournamentId) {
+            // Автоматически переходим к турнирной игре
+            navigate(`/tournament-game/${data.matchId}`);
+        }
+    };
 
-    if (loading) return <div>Loading tournament...</div>;
-    if (error) return <div>{error}</div>;
-    if (!tournament) return <div>Tournament not found.</div>;
+    const handleRegister = async () => {
+        if (!user || !tournamentId) {
+            navigate('/login');
+            return;
+        }
 
-    const canRegister = tournament.status === 'REGISTERING' && !isRegistered && tournament.players.length < tournament.maxPlayers;
-    const statusText: { [key: string]: string } = { REGISTERING: 'Набор игроков', ACTIVE: 'Активный', FINISHED: 'Завершен' };
-    const statusStyle: { [key: string]: string } = { REGISTERING: styles.statusRegistering, ACTIVE: styles.statusActive, FINISHED: styles.statusFinished };
+        try {
+            const socketId = socket?.id;
+            await tournamentService.registerInTournament(tournamentId, socketId);
+            await loadTournament();
+        } catch (err: any) {
+            alert(err.message);
+        }
+    };
 
-    return (
-        <div className={styles.pageContainer}>
-            <div className={styles.card}>
-                <div className={styles.header}>
-                    <div className={styles.headerInfo}>
-                        <div className={styles.headerIcon}><Trophy /></div>
-                        <div className={styles.headerText}>
-                            <h1>{tournament.name}</h1>
-                            <p>{tournament.gameType.replace('-', ' ')}</p>
-                        </div>
-                    </div>
-                    <div className={styles.prizePool}>
-                        <p className={styles.prizePoolValue}>${tournament.prizePool?.toLocaleString() || '0'}</p>
-                        <p className={styles.prizePoolLabel}>Призовой фонд</p>
-                    </div>
-                </div>
+    const handleUnregister = async () => {
+        if (!tournamentId) return;
+        
+        try {
+            await tournamentService.unregisterFromTournament(tournamentId);
+            await loadTournament();
+        } catch (err: any) {
+            alert(err.message);
+        }
+    };
 
-                <div className={styles.detailsGrid}>
-                    <div className={styles.detailItem}><Users size={20} /><p>{tournament.players.length}/{tournament.maxPlayers} игроков</p></div>
-                    <div className={styles.detailItem}><DollarSign size={20} /><p>${tournament.entryFee} взнос</p></div>
-                    <div className={styles.detailItem}><Calendar size={20} /><p>{new Date(tournament.createdAt).toLocaleDateString()}</p></div>
-                    <div className={styles.detailItem}><Clock size={20} /><span className={`${styles.statusBadge} ${statusStyle[tournament.status]}`}>{statusText[tournament.status]}</span></div>
-                </div>
+    const renderBracket = () => {
+        if (!tournament || tournament.bracket.length === 0) {
+            return <div className={styles.noBracket}>Турнирная сетка еще не создана</div>;
+        }
 
-                {isRegistered && (
-                    <div className={styles.registrationStatus}>
-                        <Crown size={20} /><span>Вы зарегистрированы в этом турнире!</span>
-                    </div>
-                )}
-
-                <div className={styles.actions}>
-                    {canRegister ? (
-                        <button onClick={handleRegister} className={`${styles.actionButton} ${styles.btnBlue}`}><Trophy /><span>Играть за ${tournament.entryFee}$</span></button>
-                    ) : tournament.status === 'REGISTERING' && tournament.players.length < tournament.maxPlayers ? (
-                        <div className={styles.waitingMessage}>
-                            <Clock size={20} />
-                            <span>Ожидание игроков... ({tournament.players.length}/{tournament.maxPlayers})</span>
-                        </div>
-                    ) : tournament.status === 'ACTIVE' && isRegistered ? (
-                        <div className={styles.waitingMessage}>
-                            <Clock size={20} />
-                            <span>Турнир активен. Ожидание вашего матча...</span>
-                        </div>
-                    ) : null}
-                </div>
-            </div>
-
-            <div className={styles.card}>
-                <h2 style={{fontSize: '1.5rem', fontWeight: 700, color: 'white', marginBottom: '1.5rem'}}>Турнирная сетка</h2>
-                {tournament.bracket && tournament.bracket.length > 0 ? (
-                    <div className={styles.bracketContainer}>
-                        <div className={styles.bracket}>
-                            {tournament.bracket.map((round: any, roundIndex: number) => (
-                                <div key={roundIndex} className={styles.round}>
-                                    <h3 className={styles.roundTitle}>{round.roundName}</h3>
-                                    {round.matches.map((match: any) => (
-                                        <div key={match.matchId} className={styles.match}>
-                                            <div className={`${styles.playerSlot} ${match.winner?._id === match.players[0]?._id ? styles.winner : ''}`}>
-                                                <span>{match.players[0]?.username || 'TBD'}</span>
-                                                {match.winner?._id === match.players[0]?._id && <Crown size={16} />}
-                                            </div>
-                                            <div className={styles.vsText}>VS</div>
-                                            <div className={`${styles.playerSlot} ${match.winner?._id === match.players[1]?._id ? styles.winner : ''}`}>
-                                                <span>{match.players[1]?.username || 'TBD'}</span>
-                                                {match.winner?._id === match.players[1]?._id && <Crown size={16} />}
-                                            </div>
+        return (
+            <div className={styles.bracket}>
+                {tournament.bracket.map((round, roundIndex) => (
+                    <div key={roundIndex} className={styles.round}>
+                        <h4 className={styles.roundTitle}>
+                            {tournamentService.formatRoundName(round.round, tournament.bracket.length)}
+                        </h4>
+                        <div className={styles.matches}>
+                            {round.matches.map((match, matchIndex) => (
+                                <div key={matchIndex} className={styles.match}>
+                                    <div className={styles.matchPlayers}>
+                                        <div className={`${styles.player} ${match.winner?._id === match.player1._id ? styles.winner : ''}`}>
+                                            <span className={styles.playerName}>
+                                                {match.player1.username}
+                                                {match.player1.isBot && ' 🤖'}
+                                            </span>
                                         </div>
-                                    ))}
+                                        <div className={styles.vs}>VS</div>
+                                        <div className={`${styles.player} ${match.winner?._id === match.player2._id ? styles.winner : ''}`}>
+                                            <span className={styles.playerName}>
+                                                {match.player2.username}
+                                                {match.player2.isBot && ' 🤖'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className={styles.matchStatus}>
+                                        {match.status === 'FINISHED' && match.winner && (
+                                            <span className={styles.matchWinner}>
+                                                Победитель: {match.winner.username}
+                                            </span>
+                                        )}
+                                        {match.status === 'ACTIVE' && (
+                                            <span className={styles.matchActive}>Идет игра</span>
+                                        )}
+                                        {match.status === 'PENDING' && (
+                                            <span className={styles.matchPending}>Ожидание</span>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
-                ) : (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
-                        {tournament.status === 'REGISTERING' ? (
-                            <p>Турнирная сетка будет сгенерирована при запуске турнира.</p>
-                        ) : (
-                            <p>Сетка недоступна.</p>
-                        )}
+                ))}
+            </div>
+        );
+    };
+
+    const renderPlayerCurrentMatch = () => {
+        if (!tournament || !user) return null;
+
+        const currentMatch = tournamentService.getPlayerCurrentMatch(tournament, user._id);
+        if (!currentMatch) return null;
+
+        const opponent = currentMatch.player1._id === user._id ? currentMatch.player2 : currentMatch.player1;
+
+        return (
+            <div className={styles.currentMatch}>
+                <h3>Ваш текущий матч</h3>
+                <div className={styles.matchInfo}>
+                    <div className={styles.opponent}>
+                        Противник: {opponent.username}
+                        {opponent.isBot && ' 🤖'}
+                    </div>
+                    <div className={styles.matchStatusInfo}>
+                        Статус: {currentMatch.status === 'ACTIVE' ? 'Игра идет' : 'Ожидание'}
+                    </div>
+                    {currentMatch.status === 'ACTIVE' && (
+                        <button 
+                            onClick={() => navigate(`/tournament-game/${currentMatch.matchId}`)}
+                            className={styles.joinGameButton}
+                        >
+                            Перейти к игре
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const formatTimeUntilStart = (time: number): string => {
+        if (time <= 0) return '';
+        const seconds = Math.ceil(time / 1000);
+        return `Старт через ${seconds} секунд`;
+    };
+
+    const isPlayerRegistered = (): boolean => {
+        return user && tournament ? tournamentService.isPlayerRegistered(tournament, user._id) : false;
+    };
+
+    const canPlayerRegister = (): boolean => {
+        return user && tournament ? tournamentService.canPlayerRegister(tournament, user._id) : false;
+    };
+
+    const getPlayerPrizePlace = (): number | null => {
+        return user && tournament ? tournamentService.getPlayerPrizePlace(tournament, user._id) : null;
+    };
+
+    if (loading) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.loading}>Загрузка турнира...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.error}>
+                    Ошибка: {error}
+                    <button onClick={loadTournament} className={styles.retryButton}>
+                        Попробовать снова
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!tournament) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.error}>Турнир не найден</div>
+            </div>
+        );
+    }
+
+    const prizePlace = getPlayerPrizePlace();
+
+    return (
+        <div className={styles.container}>
+            <div className={styles.header}>
+                <button onClick={() => navigate('/tournaments')} className={styles.backButton}>
+                    ← Назад к турнирам
+                </button>
+                <h1>{tournament.name}</h1>
+                <span className={`${styles.status} ${styles[tournament.status.toLowerCase()]}`}>
+                    {statusText[tournament.status]}
+                </span>
+            </div>
+
+            <div className={styles.tournamentInfo}>
+                <div className={styles.infoGrid}>
+                    <div className={styles.infoItem}>
+                        <span className={styles.label}>Игра:</span>
+                        <span>{gameTypeText[tournament.gameType]}</span>
+                    </div>
+                    <div className={styles.infoItem}>
+                        <span className={styles.label}>Взнос:</span>
+                        <span>{tournament.entryFee} монет</span>
+                    </div>
+                    <div className={styles.infoItem}>
+                        <span className={styles.label}>Призовой фонд:</span>
+                        <span>{tournament.prizePool} монет</span>
+                    </div>
+                    <div className={styles.infoItem}>
+                        <span className={styles.label}>Игроки:</span>
+                        <span>{tournament.players.length}/{tournament.maxPlayers}</span>
+                    </div>
+                    <div className={styles.infoItem}>
+                        <span className={styles.label}>Комиссия платформы:</span>
+                        <span>{tournament.platformCommission}%</span>
+                    </div>
+                    {tournament.startedAt && (
+                        <div className={styles.infoItem}>
+                            <span className={styles.label}>Начат:</span>
+                            <span>{new Date(tournament.startedAt).toLocaleString()}</span>
+                        </div>
+                    )}
+                    {tournament.finishedAt && (
+                        <div className={styles.infoItem}>
+                            <span className={styles.label}>Завершен:</span>
+                            <span>{new Date(tournament.finishedAt).toLocaleString()}</span>
+                        </div>
+                    )}
+                </div>
+
+                {timeUntilStart > 0 && (
+                    <div className={styles.startTimer}>
+                        ⏰ {formatTimeUntilStart(timeUntilStart)}
                     </div>
                 )}
+
+                {tournament.status === 'FINISHED' && tournament.winner && (
+                    <div className={styles.winner}>
+                        🏆 Победитель: {tournament.winner.username}
+                        {tournament.winner.isBot && ' 🤖'}
+                    </div>
+                )}
+
+                {prizePlace && (
+                    <div className={styles.playerPrize}>
+                        🏅 Ваше место: {prizePlace}
+                    </div>
+                )}
+            </div>
+
+            <div className={styles.actions}>
+                {tournament.status === 'WAITING' && (
+                    <>
+                        {isPlayerRegistered() ? (
+                            <button 
+                                onClick={handleUnregister}
+                                className={styles.unregisterButton}
+                            >
+                                Отменить регистрацию
+                            </button>
+                        ) : canPlayerRegister() ? (
+                            <button 
+                                onClick={handleRegister}
+                                className={styles.registerButton}
+                            >
+                                Зарегистрироваться
+                            </button>
+                        ) : (
+                            <button 
+                                disabled 
+                                className={styles.disabledButton}
+                            >
+                                {tournament.players.length >= tournament.maxPlayers 
+                                    ? 'Турнир заполнен' 
+                                    : 'Недостаточно средств'
+                                }
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {renderPlayerCurrentMatch()}
+
+            <div className={styles.participants}>
+                <h3>Участники ({tournament.players.length}/{tournament.maxPlayers})</h3>
+                <div className={styles.playersList}>
+                    {tournament.players.map((player, index) => (
+                        <div key={player._id} className={styles.participant}>
+                            <span className={styles.playerNumber}>#{index + 1}</span>
+                            <span className={styles.playerName}>
+                                {player.username}
+                                {player.isBot && ' 🤖'}
+                                {user && player._id === user._id && ' (Вы)'}
+                            </span>
+                            <span className={styles.registrationTime}>
+                                {new Date(player.registeredAt).toLocaleString()}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div className={styles.bracketSection}>
+                <h3>Турнирная сетка</h3>
+                {renderBracket()}
             </div>
         </div>
     );

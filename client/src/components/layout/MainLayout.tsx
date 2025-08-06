@@ -10,6 +10,7 @@ import DashboardPage from '../../pages/DashboardPage/DashboardPage';
 import HomePage from '../../pages/HomePage/HomePage';
 import TournamentsListPage from '../../pages/TournamentsListPage/TournamentsListPage';
 import TournamentDetailPage from '../../pages/TournamentDetailPage/TournamentDetailPage';
+import TournamentGamePage from '../../pages/TournamentGamePage/TournamentGamePage';
 import ProfilePage from '../../pages/ProfilePage/ProfilePage';
 import NotificationsPage from '../../pages/NotificationsPage/NotificationsPage';
 import LobbyPage from '../../pages/LobbyPage/LobbyPage';
@@ -31,7 +32,8 @@ const MainLayout: React.FC = () => {
                         <Route path="/" element={<DashboardPage />} />
                         <Route path="/games" element={<HomePage />} />
                         <Route path="/tournaments" element={<TournamentsListPage />} />
-                        <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
+                        <Route path="/tournament/:id" element={<TournamentDetailPage />} />
+                        <Route path="/tournament-game/:matchId" element={<TournamentGamePage />} />
                         <Route path="/profile" element={<ProfilePage />} />
                         <Route path="/notifications" element={<NotificationsPage />} />
                         <Route path="/lobby/:gameType" element={<LobbyPage />} />

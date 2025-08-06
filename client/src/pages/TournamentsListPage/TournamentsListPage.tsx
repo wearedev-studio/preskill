@@ -1,122 +1,303 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { getTournaments, ITournament } from '../../services/tournamentService';
-import { Trophy, Users, DollarSign, Calendar, Clock, Crown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Tournament, tournamentService } from '../../services/tournamentService';
+import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import styles from './TournamentsListPage.module.css';
 
-const TournamentCard: React.FC<{ tournament: ITournament }> = ({ tournament }) => {
-    const statusStyles = {
-        REGISTERING: styles.statusRegistering,
-        ACTIVE: styles.statusActive,
-        FINISHED: styles.statusFinished,
-    };
+const TournamentsListPage: React.FC = () => {
+    const [tournaments, setTournaments] = useState<Tournament[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [filter, setFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('all');
+    const [gameTypeFilter, setGameTypeFilter] = useState<'all' | 'tic-tac-toe' | 'checkers' | 'chess' | 'backgammon'>('all');
+    
+    const { user } = useAuth();
+    const { socket } = useSocket();
+    const navigate = useNavigate();
+
     const statusText = {
-        REGISTERING: 'Набор игроков',
+        WAITING: 'Ожидание игроков',
         ACTIVE: 'Активный',
         FINISHED: 'Завершен',
         CANCELLED: 'Отменен'
     };
 
-    return (
-        <Link to={`/tournaments/${tournament._id}`} className={styles.tournamentCard}>
-            <div className={styles.cardHeader}>
-                <div className={styles.cardTitleSection}>
-                    <div className={styles.cardIcon}><Trophy /></div>
-                    <div>
-                        <h3 className={styles.cardTitle}>{tournament.name}</h3>
-                        <p className={styles.cardSubtitle}>{tournament.gameType}</p>
-                    </div>
-                </div>
-                {/* @ts-ignore */}
-                <span className={`${styles.cardStatus} ${statusStyles[tournament.status] || ''}`}>
-                    {statusText[tournament.status] || tournament.status}
-                </span>
-            </div>
-
-            <div className={styles.cardInfoGrid}>
-                <div className={styles.infoItem}><DollarSign /><p>Взнос: ${tournament.entryFee}</p></div>
-                <div className={styles.infoItem}><Users /><p>{tournament.players.length}/{tournament.maxPlayers} игроков</p></div>
-                <div className={`${styles.infoItem} ${styles.fullWidth}`}><Calendar /><p>Создан: {new Date(tournament.createdAt).toLocaleString()}</p></div>
-            </div>
-
-            <div className={styles.cardFooter}>
-                <div className={styles.prizePool}>
-                    <p className={styles.prizePoolValue}>${tournament.prizePool?.toLocaleString() || '0'}</p>
-                    <p className={styles.prizePoolLabel}>Призовой фонд</p>
-                </div>
-                <span className={styles.detailsLink}>Подробнее →</span>
-            </div>
-        </Link>
-    );
-};
-
-const TournamentsListPage: React.FC = () => {
-    const [allTournaments, setAllTournaments] = useState<ITournament[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [filter, setFilter] = useState<'REGISTERING' | 'ACTIVE' | 'FINISHED'>('REGISTERING');
+    const gameTypeText = {
+        'tic-tac-toe': 'Крестики-нолики',
+        'checkers': 'Шашки',
+        'chess': 'Шахматы',
+        'backgammon': 'Нарды'
+    };
 
     useEffect(() => {
-        const fetchTournaments = async () => {
-            try {
-                setLoading(true);
-                const data = await getTournaments();
-                setAllTournaments(data);
-            } catch (error) {
-                console.error("Failed to load tournaments", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchTournaments();
+        loadTournaments();
     }, []);
 
-    const filteredTournaments = useMemo(() => {
-        return allTournaments.filter(t => t.status === filter);
-    }, [allTournaments, filter]);
+    useEffect(() => {
+        if (socket) {
+            socket.on('tournamentCreated', handleTournamentUpdate);
+            socket.on('tournamentUpdated', handleTournamentUpdate);
+            socket.on('tournamentStarted', handleTournamentUpdate);
+            socket.on('tournamentFinished', handleTournamentUpdate);
+
+            return () => {
+                socket.off('tournamentCreated', handleTournamentUpdate);
+                socket.off('tournamentUpdated', handleTournamentUpdate);
+                socket.off('tournamentStarted', handleTournamentUpdate);
+                socket.off('tournamentFinished', handleTournamentUpdate);
+            };
+        }
+    }, [socket]);
+
+    const loadTournaments = async () => {
+        try {
+            setLoading(true);
+            const data = await tournamentService.getActiveTournaments();
+            setTournaments(data);
+            setError(null);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTournamentUpdate = (updatedTournament: Tournament) => {
+        setTournaments(prev => {
+            const index = prev.findIndex(t => t._id === updatedTournament._id);
+            if (index >= 0) {
+                const newTournaments = [...prev];
+                newTournaments[index] = updatedTournament;
+                return newTournaments;
+            } else {
+                return [updatedTournament, ...prev];
+            }
+        });
+    };
+
+    const handleRegister = async (tournamentId: string) => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+
+        try {
+            const socketId = socket?.id;
+            await tournamentService.registerInTournament(tournamentId, socketId);
+            await loadTournaments(); // Обновляем список
+        } catch (err: any) {
+            alert(err.message);
+        }
+    };
+
+    const handleUnregister = async (tournamentId: string) => {
+        try {
+            await tournamentService.unregisterFromTournament(tournamentId);
+            await loadTournaments(); // Обновляем список
+        } catch (err: any) {
+            alert(err.message);
+        }
+    };
+
+    const filteredTournaments = tournaments.filter(tournament => {
+        if (filter !== 'all' && tournament.status.toLowerCase() !== filter) {
+            return false;
+        }
+        if (gameTypeFilter !== 'all' && tournament.gameType !== gameTypeFilter) {
+            return false;
+        }
+        return true;
+    });
+
+    const getTimeUntilStart = (tournament: Tournament): string => {
+        const timeLeft = tournamentService.getTimeUntilStart(tournament);
+        if (timeLeft <= 0) return '';
+        
+        const seconds = Math.ceil(timeLeft / 1000);
+        return `Старт через ${seconds}с`;
+    };
+
+    const isPlayerRegistered = (tournament: Tournament): boolean => {
+        return user ? tournamentService.isPlayerRegistered(tournament, user._id) : false;
+    };
+
+    const canPlayerRegister = (tournament: Tournament): boolean => {
+        return user ? tournamentService.canPlayerRegister(tournament, user._id) : false;
+    };
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p className="text-slate-400">Loading tournaments...</p>
+            <div className={styles.container}>
+                <div className={styles.loading}>Загрузка турниров...</div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className={styles.container}>
+                <div className={styles.error}>
+                    Ошибка: {error}
+                    <button onClick={loadTournaments} className={styles.retryButton}>
+                        Попробовать снова
+                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className={styles.pageContainer}>
+        <div className={styles.container}>
             <div className={styles.header}>
-                <div>
-                    <h1>Турниры</h1>
-                    <p>Участвуйте в турнирах и выигрывайте призы</p>
-                </div>
-                <div className={styles.ratingWidget}>
-                    <div className={styles.ratingWidgetText}>
-                        <p>Всего турниров</p>
-                        <p>{allTournaments.length}</p>
-                    </div>
-                    <div className={styles.ratingWidgetIcon}><Trophy /></div>
-                </div>
+                <h1>Турниры</h1>
+                <button 
+                    onClick={loadTournaments} 
+                    className={styles.refreshButton}
+                    disabled={loading}
+                >
+                    🔄 Обновить
+                </button>
             </div>
 
-            <div className={styles.filterBar}>
-                <button onClick={() => setFilter('REGISTERING')} className={`${styles.filterButton} ${filter === 'REGISTERING' ? styles.active : ''}`}><Clock /><span>Набор игроков</span></button>
-                <button onClick={() => setFilter('ACTIVE')} className={`${styles.filterButton} ${filter === 'ACTIVE' ? styles.active : ''}`}><Trophy /><span>Активные</span></button>
-                <button onClick={() => setFilter('FINISHED')} className={`${styles.filterButton} ${filter === 'FINISHED' ? styles.active : ''}`}><Crown /><span>Завершенные</span></button>
+            <div className={styles.filters}>
+                <div className={styles.filterGroup}>
+                    <label>Статус:</label>
+                    <select 
+                        value={filter} 
+                        onChange={(e) => setFilter(e.target.value as any)}
+                        className={styles.filterSelect}
+                    >
+                        <option value="all">Все</option>
+                        <option value="waiting">Ожидание</option>
+                        <option value="active">Активные</option>
+                        <option value="finished">Завершенные</option>
+                    </select>
+                </div>
+
+                <div className={styles.filterGroup}>
+                    <label>Игра:</label>
+                    <select 
+                        value={gameTypeFilter} 
+                        onChange={(e) => setGameTypeFilter(e.target.value as any)}
+                        className={styles.filterSelect}
+                    >
+                        <option value="all">Все игры</option>
+                        <option value="tic-tac-toe">Крестики-нолики</option>
+                        <option value="checkers">Шашки</option>
+                        <option value="chess">Шахматы</option>
+                        <option value="backgammon">Нарды</option>
+                    </select>
+                </div>
             </div>
 
             {filteredTournaments.length === 0 ? (
                 <div className={styles.emptyState}>
-                    <Trophy />
-                    <h3>В этой категории нет турниров</h3>
-                    <p>Попробуйте выбрать другую категорию или зайдите позже.</p>
+                    <h3>Турниры не найдены</h3>
+                    <p>Попробуйте изменить фильтры или создать новый турнир</p>
                 </div>
             ) : (
-                <div className={styles.tournamentsGrid}>
+                <div className={styles.tournamentsList}>
                     {filteredTournaments.map(tournament => (
-                        <TournamentCard key={tournament._id} tournament={tournament} />
+                        <div key={tournament._id} className={styles.tournamentCard}>
+                            <div className={styles.tournamentHeader}>
+                                <h3 className={styles.tournamentName}>{tournament.name}</h3>
+                                <span className={`${styles.status} ${styles[tournament.status.toLowerCase()]}`}>
+                                    {statusText[tournament.status]}
+                                </span>
+                            </div>
+
+                            <div className={styles.tournamentInfo}>
+                                <div className={styles.infoRow}>
+                                    <span className={styles.label}>Игра:</span>
+                                    <span>{gameTypeText[tournament.gameType]}</span>
+                                </div>
+                                <div className={styles.infoRow}>
+                                    <span className={styles.label}>Взнос:</span>
+                                    <span>{tournament.entryFee} монет</span>
+                                </div>
+                                <div className={styles.infoRow}>
+                                    <span className={styles.label}>Призовой фонд:</span>
+                                    <span>{tournament.prizePool} монет</span>
+                                </div>
+                                <div className={styles.infoRow}>
+                                    <span className={styles.label}>Игроки:</span>
+                                    <span>
+                                        {tournament.players.length}/{tournament.maxPlayers}
+                                        <div className={styles.progressBar}>
+                                            <div 
+                                                className={styles.progressFill}
+                                                style={{ 
+                                                    width: `${tournamentService.getFilledPercentage(tournament)}%` 
+                                                }}
+                                            />
+                                        </div>
+                                    </span>
+                                </div>
+                            </div>
+
+                            {tournamentService.isStartingSoon(tournament) && (
+                                <div className={styles.startTimer}>
+                                    ⏰ {getTimeUntilStart(tournament)}
+                                </div>
+                            )}
+
+                            <div className={styles.tournamentActions}>
+                                {tournament.status === 'WAITING' && (
+                                    <>
+                                        {isPlayerRegistered(tournament) ? (
+                                            <button 
+                                                onClick={() => handleUnregister(tournament._id)}
+                                                className={styles.unregisterButton}
+                                            >
+                                                Отменить регистрацию
+                                            </button>
+                                        ) : canPlayerRegister(tournament) ? (
+                                            <button 
+                                                onClick={() => handleRegister(tournament._id)}
+                                                className={styles.registerButton}
+                                            >
+                                                Зарегистрироваться
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                disabled 
+                                                className={styles.disabledButton}
+                                            >
+                                                {tournament.players.length >= tournament.maxPlayers 
+                                                    ? 'Турнир заполнен' 
+                                                    : 'Недостаточно средств'
+                                                }
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+
+                                <button 
+                                    onClick={() => navigate(`/tournament/${tournament._id}`)}
+                                    className={styles.viewButton}
+                                >
+                                    Подробнее
+                                </button>
+                            </div>
+
+                            {tournament.players.length > 0 && (
+                                <div className={styles.playersList}>
+                                    <h4>Участники:</h4>
+                                    <div className={styles.players}>
+                                        {tournament.players.map((player, index) => (
+                                            <span
+                                                key={`${player._id}-${index}`}
+                                                className={`${styles.player} ${player.isBot ? styles.bot : ''}`}
+                                            >
+                                                {player.username}
+                                                {player.isBot && ' 🤖'}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     ))}
                 </div>
             )}
@@ -125,126 +306,3 @@ const TournamentsListPage: React.FC = () => {
 };
 
 export default TournamentsListPage;
-// import React, { useState, useEffect, useMemo } from 'react';
-// import { Link } from 'react-router-dom';
-// import { getTournaments, ITournament } from '../../services/tournamentService';
-// import { Trophy, Users, DollarSign, Calendar, Clock, Crown } from 'lucide-react';
-// import styles from './TournamentsListPage.module.css';
-
-// const TournamentCard: React.FC<{ tournament: ITournament }> = ({ tournament }) => {
-//     const statusStyles: { [key: string]: string } = {
-//         REGISTERING: styles.statusRegistering,
-//         ACTIVE: styles.statusActive,
-//         FINISHED: styles.statusFinished,
-//     };
-//     const statusText: { [key: string]: string } = {
-//         REGISTERING: 'Registering',
-//         ACTIVE: 'Active',
-//         FINISHED: 'Finished',
-//         CANCELLED: 'Canceled'
-//     };
-
-//     return (
-//         <Link to={`/tournaments/${tournament._id}`} className={styles.tournamentCard}>
-//             <div className={styles.cardHeader}>
-//                 <div className={styles.cardTitleSection}>
-//                     <div className={styles.cardIcon}><Trophy /></div>
-//                     <div>
-//                         <h3 className={styles.cardTitle}>{tournament.name}</h3>
-//                         <p className={styles.cardSubtitle}>{tournament.gameType}</p>
-//                     </div>
-//                 </div>
-//                 <span className={`${styles.cardStatus} ${statusStyles[tournament.status] || ''}`}>
-//                     {statusText[tournament.status] || tournament.status}
-//                 </span>
-//             </div>
-
-//             <div className={styles.cardInfoGrid}>
-//                 <div className={styles.infoItem}><DollarSign /><p>Contribution: ${tournament.entryFee}</p></div>
-//                 <div className={styles.infoItem}><Users /><p>{tournament.players.length}/{tournament.maxPlayers} players</p></div>
-//                 <div className={`${styles.infoItem} ${styles.fullWidth}`}><Calendar /><p>Start: {new Date(tournament.startTime).toLocaleString()}</p></div>
-//             </div>
-
-//             <div className={styles.cardFooter}>
-//                 <div className={styles.prizePool}>
-//                     {/* @ts-ignore */}
-//                     <p className={styles.prizePoolValue}>${tournament.prizePool.toLocaleString()}</p>
-//                     <p className={styles.prizePoolLabel}>Prize fund</p>
-//                 </div>
-//                 <span className={styles.detailsLink}>Read more →</span>
-//             </div>
-//         </Link>
-//     );
-// };
-
-// const TournamentsListPage: React.FC = () => {
-//     const [allTournaments, setAllTournaments] = useState<ITournament[]>([]);
-//     const [loading, setLoading] = useState(true);
-//     const [filter, setFilter] = useState<'REGISTERING' | 'ACTIVE' | 'FINISHED'>('REGISTERING');
-
-//     useEffect(() => {
-//         const fetchTournaments = async () => {
-//             try {
-//                 setLoading(true);
-//                 // @ts-ignore
-//                 const { data } = await getTournaments();
-//                 setAllTournaments(data);
-//             } catch (error) {
-//                 console.error("Failed to load tournaments", error);
-//             } finally {
-//                 setLoading(false);
-//             }
-//         };
-//         fetchTournaments();
-//     }, []);
-
-//     const filteredTournaments = useMemo(() => {
-//         return allTournaments.filter(t => t.status === filter);
-//     }, [allTournaments, filter]);
-
-//     if (loading) {
-//         return (
-//             <div>Loading tournaments...</div>
-//         );
-//     }
-
-//     return (
-//         <div className={styles.pageContainer}>
-//             <div className={styles.header}>
-//                 <div>
-//                     <h1>Tournaments</h1>
-//                     <p>Take part in tournaments and win prizes</p>
-//                 </div>
-//                 <div className={styles.ratingWidget}>
-//                     <div className={styles.ratingWidgetText}>
-//                         <p>Total tournaments</p>
-//                         <p>{allTournaments.length}</p>
-//                     </div>
-//                     <div className={styles.ratingWidgetIcon}><Trophy /></div>
-//                 </div>
-//             </div>
-
-//             <div className={styles.filterBar}> 
-//                 <button onClick={() => setFilter('REGISTERING')} className={`${styles.filterButton} ${filter === 'REGISTERING' ? styles.active : ''}`}><Clock /><span>Registration</span></button> 
-//                 <button onClick={() => setFilter('ACTIVE')} className={`${styles.filterButton} ${filter === 'ACTIVE' ? styles.active : ''}`}><Trophy /><span>Active</span></button>
-//                 <button onClick={() => setFilter('FINISHED')} className={`${styles.filterButton} ${filter === 'FINISHED' ? styles.active : ''}`}><Crown /><span>Completed</span></button>
-//             </div>
-
-//             {filteredTournaments.length === 0 ? (
-//                 <div className={styles.emptyState}>
-//                     <Trophy />
-//                     <h3>There are no tournaments in this category</h3>
-//                     <p>Try choosing another category or check back later.</p>
-//                 </div>
-//             ) : (
-//                 <div className={styles.tournamentsGrid}>
-//                     {filteredTournaments.map(tournament => (
-//                         <TournamentCard key={tournament._id} tournament={tournament} />
-//                     ))}
-//                 </div>
-//             )}
-//         </div>
-//     );
-// };
-
-// export default TournamentsListPage;

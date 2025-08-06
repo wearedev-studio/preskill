@@ -391,8 +391,17 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
         const boardElement = document.querySelector(`.${styles.boardGrid}`);
         if (boardElement) {
             const rect = boardElement.getBoundingClientRect();
+            
+            // Учитываем возможные трансформации и скроллинг
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
+            
+            // Проверяем, что координаты находятся в пределах доски
+            if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+                setDraggedPiece(null);
+                setPossibleMoves([]);
+                return;
+            }
             
             const squareSize = rect.width / 8;
             let col = Math.floor(x / squareSize);
@@ -405,7 +414,7 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
             }
 
             if (row >= 0 && row < 8 && col >= 0 && col < 8) {
-                const isValidMove = possibleMoves.some(move => 
+                const isValidMove = possibleMoves.some(move =>
                     move.row === row && move.col === col
                 );
 
@@ -416,8 +425,8 @@ const ChessBoard: React.FC<ChessBoardProps> = ({
                     };
 
                     // Проверяем превращение пешки
-                    if (draggedPiece.piece.type === 'pawn' && 
-                        ((draggedPiece.piece.color === 'white' && row === 0) || 
+                    if (draggedPiece.piece.type === 'pawn' &&
+                        ((draggedPiece.piece.color === 'white' && row === 0) ||
                          (draggedPiece.piece.color === 'black' && row === 7))) {
                         setPromotionMove(move);
                     } else {
