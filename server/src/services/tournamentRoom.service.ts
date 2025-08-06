@@ -658,6 +658,8 @@ async function checkAndCreateNextRound(io: Server, tournament: ITournament): Pro
  */
 async function accelerateBotMatches(io: Server, tournament: ITournament, currentRound: any): Promise<void> {
     try {
+        let acceleratedAny = false;
+        
         for (const match of currentRound.matches) {
             if (match.status === 'ACTIVE' && match.player1 && match.player2) {
                 // Проверяем, есть ли матчи только между ботами
@@ -693,9 +695,25 @@ async function accelerateBotMatches(io: Server, tournament: ITournament, current
                         await advanceWinnerInTournament(io, tournament._id.toString(), room.matchId, winner);
                         
                         console.log(`[TournamentRoom] Accelerated bot match ${room.matchId}, winner: ${winner.username}`);
+                        acceleratedAny = true;
                     }
                 }
             }
+        }
+        
+        // КРИТИЧЕСКИ ВАЖНО: После ускорения матчей перепроверяем раунд
+        if (acceleratedAny) {
+            console.log(`[TournamentRoom] Accelerated bot matches, rechecking tournament ${tournament._id}`);
+            setTimeout(async () => {
+                try {
+                    const updatedTournament = await Tournament.findById(tournament._id);
+                    if (updatedTournament) {
+                        await checkAndCreateNextRound(io, updatedTournament);
+                    }
+                } catch (error) {
+                    console.error(`[TournamentRoom] Error in recheck after acceleration:`, error);
+                }
+            }, 1000); // Небольшая задержка для завершения всех операций
         }
     } catch (error) {
         console.error(`[TournamentRoom] Error accelerating bot matches:`, error);
@@ -792,7 +810,10 @@ async function createNextRoundMatches(io: Server, tournament: ITournament, curre
         
         // После создания всех матчей, проверяем, нужно ли сразу создать следующий раунд
         setTimeout(async () => {
-            await checkAndCreateNextRound(io, tournament);
+            const updatedTournament = await Tournament.findById(tournament._id);
+            if (updatedTournament) {
+                await checkAndCreateNextRound(io, updatedTournament);
+            }
         }, 2000); // Даем время ботам завершить свои матчи
         
     } catch (error) {
@@ -863,11 +884,30 @@ async function finishTournament(io: Server, tournament: ITournament, winner: any
         // Уведомляем участников
         for (const player of tournament.players) {
             if (!player.isBot) {
-                const isWinner = player._id === winner._id;
+                const isWinner = player._id.toString() === winner._id.toString();
+                
+                // Отправляем событие о завершении турнира
+                const playerSocket = Object.keys(tournamentPlayerSockets).find(playerId =>
+                    playerId === player._id.toString()
+                );
+                
+                if (playerSocket) {
+                    const socket = io.sockets.sockets.get(tournamentPlayerSockets[playerSocket]);
+                    if (socket) {
+                        socket.emit('tournamentCompleted', {
+                            tournamentId: tournament._id,
+                            isWinner,
+                            winner: winner.username,
+                            tournamentName: tournament.name,
+                            prizePool: tournament.prizePool
+                        });
+                    }
+                }
+                
                 await createNotification(io, player._id, {
                     title: isWinner ? `🏆 Поздравляем с победой!` : `🎯 Турнир завершен`,
                     message: isWinner
-                        ? `Вы выиграли турнир "${tournament.name}"!`
+                        ? `Вы выиграли турнир "${tournament.name}"! Приз: ${Math.floor(tournament.prizePool * 0.6)} монет`
                         : `Турнир "${tournament.name}" завершен. Победитель: ${winner.username}`,
                     link: `/tournament/${tournament._id}`
                 });

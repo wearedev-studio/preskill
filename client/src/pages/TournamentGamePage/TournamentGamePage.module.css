@@ -400,3 +400,44 @@
 .errorIcon {
     font-size: 18px;
 }
+
+/* Стили для завершения турнира */
+.tournamentResult {
+    text-align: center;
+    padding: 20px;
+}
+
+.tournamentResult h3 {
+    margin: 10px 0;
+    color: #333;
+    font-size: 20px;
+}
+
+.tournamentResult p {
+    margin: 8px 0;
+    color: #666;
+    font-size: 16px;
+}
+
+.prizeInfo {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    padding: 15px;
+    border-radius: 10px;
+    margin: 20px 0;
+    border: 2px solid rgba(76, 175, 80, 0.3);
+}
+
+.gameResultModal h2 {
+    margin: 0 0 20px 0;
+    color: #1f2937;
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.winResult h3, .tournamentResult h3 {
+    margin: 15px 0;
+    font-size: 22px;
+}

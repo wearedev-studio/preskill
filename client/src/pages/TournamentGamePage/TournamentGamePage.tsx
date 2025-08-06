@@ -37,6 +37,14 @@ interface TournamentMatchResult {
     status: 'WAITING_NEXT_ROUND' | 'ELIMINATED';
 }
 
+interface TournamentCompleted {
+    tournamentId: string;
+    isWinner: boolean;
+    winner: string;
+    tournamentName: string;
+    prizePool: number;
+}
+
 const TournamentGamePage: React.FC = () => {
     const { matchId } = useParams<{ matchId: string }>();
     const [gameData, setGameData] = useState<TournamentGameState | null>(null);
@@ -45,6 +53,7 @@ const TournamentGamePage: React.FC = () => {
     const [gameResult, setGameResult] = useState<TournamentGameResult | null>(null);
     const [gameError, setGameError] = useState<string | null>(null);
     const [matchResult, setMatchResult] = useState<TournamentMatchResult | null>(null);
+    const [tournamentCompleted, setTournamentCompleted] = useState<TournamentCompleted | null>(null);
     
     const { user } = useAuth();
     const { socket } = useSocket();
@@ -74,6 +83,7 @@ const TournamentGamePage: React.FC = () => {
         socket.on('tournamentGameError', handleGameError);
         socket.on('tournamentMatchResult', handleMatchResult);
         socket.on('tournamentMatchReady', handleNextRoundReady);
+        socket.on('tournamentCompleted', handleTournamentCompleted);
         socket.on('error', handleError);
 
         return () => {
@@ -83,6 +93,7 @@ const TournamentGamePage: React.FC = () => {
             socket.off('tournamentGameError', handleGameError);
             socket.off('tournamentMatchResult', handleMatchResult);
             socket.off('tournamentMatchReady', handleNextRoundReady);
+            socket.off('tournamentCompleted', handleTournamentCompleted);
             socket.off('error', handleError);
         };
     }, [matchId, socket, user]);
@@ -130,6 +141,16 @@ const TournamentGamePage: React.FC = () => {
         if (data.matchId) {
             navigate(`/tournament-game/${data.matchId}`);
         }
+    };
+
+    const handleTournamentCompleted = (data: TournamentCompleted) => {
+        console.log('[TournamentGame] Tournament completed:', data);
+        setTournamentCompleted(data);
+        
+        // Через 10 секунд возвращаемся к турнирам
+        setTimeout(() => {
+            navigate('/tournaments');
+        }, 10000);
     };
 
     const handleError = (error: { message: string }) => {
@@ -296,6 +317,49 @@ const TournamentGamePage: React.FC = () => {
         );
     };
 
+    const renderTournamentCompleted = () => {
+        if (!tournamentCompleted) return null;
+
+        return (
+            <div className={styles.gameResultOverlay}>
+                <div className={styles.gameResultModal}>
+                    <h2>🏆 Турнир завершен!</h2>
+                    
+                    {tournamentCompleted.isWinner ? (
+                        <div className={styles.winResult}>
+                            <span className={styles.resultIcon}>🥇</span>
+                            <h3>Поздравляем с победой!</h3>
+                            <p>Вы выиграли турнир "{tournamentCompleted.tournamentName}"!</p>
+                            <p className={styles.prizeInfo}>
+                                Ваш приз: {Math.floor(tournamentCompleted.prizePool * 0.6)} монет
+                            </p>
+                        </div>
+                    ) : (
+                        <div className={styles.tournamentResult}>
+                            <span className={styles.resultIcon}>🏁</span>
+                            <h3>Турнир завершен</h3>
+                            <p>Турнир "{tournamentCompleted.tournamentName}" завершен</p>
+                            <p>Победитель: {tournamentCompleted.winner}</p>
+                        </div>
+                    )}
+
+                    <div className={styles.resultActions}>
+                        <button
+                            onClick={() => navigate('/tournaments')}
+                            className={styles.backToTournamentsButton}
+                        >
+                            Вернуться к турнирам
+                        </button>
+                    </div>
+
+                    <p className={styles.autoRedirect}>
+                        Автоматический переход через 10 секунд...
+                    </p>
+                </div>
+            </div>
+        );
+    };
+
     if (loading) {
         return (
             <div className={styles.container}>
@@ -392,7 +456,8 @@ const TournamentGamePage: React.FC = () => {
                 </div>
             )}
 
-            {gameResult && renderGameResult()}
+            {gameResult && !tournamentCompleted && renderGameResult()}
+            {tournamentCompleted && renderTournamentCompleted()}
         </div>
     );
 };
