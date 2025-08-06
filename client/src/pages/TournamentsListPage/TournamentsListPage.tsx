@@ -11,10 +11,10 @@ const TournamentCard: React.FC<{ tournament: ITournament }> = ({ tournament }) =
         FINISHED: styles.statusFinished,
     };
     const statusText = {
-        REGISTERING: 'Registering',
-        ACTIVE: 'Active',
-        FINISHED: 'Finished',
-        CANCELLED: 'Canceled'
+        REGISTERING: 'Набор игроков',
+        ACTIVE: 'Активный',
+        FINISHED: 'Завершен',
+        CANCELLED: 'Отменен'
     };
 
     return (
@@ -34,18 +34,17 @@ const TournamentCard: React.FC<{ tournament: ITournament }> = ({ tournament }) =
             </div>
 
             <div className={styles.cardInfoGrid}>
-                <div className={styles.infoItem}><DollarSign /><p>Contribution: ${tournament.entryFee}</p></div>
-                <div className={styles.infoItem}><Users /><p>{tournament.players.length}/{tournament.maxPlayers} players</p></div>
-                <div className={`${styles.infoItem} ${styles.fullWidth}`}><Calendar /><p>Start: {new Date(tournament.startTime).toLocaleString()}</p></div>
+                <div className={styles.infoItem}><DollarSign /><p>Взнос: ${tournament.entryFee}</p></div>
+                <div className={styles.infoItem}><Users /><p>{tournament.players.length}/{tournament.maxPlayers} игроков</p></div>
+                <div className={`${styles.infoItem} ${styles.fullWidth}`}><Calendar /><p>Создан: {new Date(tournament.createdAt).toLocaleString()}</p></div>
             </div>
 
             <div className={styles.cardFooter}>
                 <div className={styles.prizePool}>
-                    {/* @ts-ignore */}
-                    <p className={styles.prizePoolValue}>${tournament.prizePool.toLocaleString()}</p>
-                    <p className={styles.prizePoolLabel}>Prize fund</p>
+                    <p className={styles.prizePoolValue}>${tournament.prizePool?.toLocaleString() || '0'}</p>
+                    <p className={styles.prizePoolLabel}>Призовой фонд</p>
                 </div>
-                <span className={styles.detailsLink}>Read more →</span>
+                <span className={styles.detailsLink}>Подробнее →</span>
             </div>
         </Link>
     );
@@ -90,29 +89,29 @@ const TournamentsListPage: React.FC = () => {
         <div className={styles.pageContainer}>
             <div className={styles.header}>
                 <div>
-                    <h1>Tournaments</h1>
-                    <p>Take part in tournaments and win prizes</p>
+                    <h1>Турниры</h1>
+                    <p>Участвуйте в турнирах и выигрывайте призы</p>
                 </div>
                 <div className={styles.ratingWidget}>
                     <div className={styles.ratingWidgetText}>
-                        <p>Total tournaments</p>
+                        <p>Всего турниров</p>
                         <p>{allTournaments.length}</p>
                     </div>
                     <div className={styles.ratingWidgetIcon}><Trophy /></div>
                 </div>
             </div>
 
-            <div className={styles.filterBar}> 
-                <button onClick={() => setFilter('REGISTERING')} className={`${styles.filterButton} ${filter === 'REGISTERING' ? styles.active : ''}`}><Clock /><span>Registration</span></button> 
-                <button onClick={() => setFilter('ACTIVE')} className={`${styles.filterButton} ${filter === 'ACTIVE' ? styles.active : ''}`}><Trophy /><span>Active</span></button>
-                <button onClick={() => setFilter('FINISHED')} className={`${styles.filterButton} ${filter === 'FINISHED' ? styles.active : ''}`}><Crown /><span>Completed</span></button>
+            <div className={styles.filterBar}>
+                <button onClick={() => setFilter('REGISTERING')} className={`${styles.filterButton} ${filter === 'REGISTERING' ? styles.active : ''}`}><Clock /><span>Набор игроков</span></button>
+                <button onClick={() => setFilter('ACTIVE')} className={`${styles.filterButton} ${filter === 'ACTIVE' ? styles.active : ''}`}><Trophy /><span>Активные</span></button>
+                <button onClick={() => setFilter('FINISHED')} className={`${styles.filterButton} ${filter === 'FINISHED' ? styles.active : ''}`}><Crown /><span>Завершенные</span></button>
             </div>
 
             {filteredTournaments.length === 0 ? (
                 <div className={styles.emptyState}>
                     <Trophy />
-                    <h3>There are no tournaments in this category</h3>
-                    <p>Try choosing another category or check back later.</p>
+                    <h3>В этой категории нет турниров</h3>
+                    <p>Попробуйте выбрать другую категорию или зайдите позже.</p>
                 </div>
             ) : (
                 <div className={styles.tournamentsGrid}>

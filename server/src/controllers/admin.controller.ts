@@ -4,7 +4,6 @@ import { Room } from '../socket';
 import User from '../models/User.model';
 import { IGameLogic } from '../games/game.logic.interface';
 import Tournament from '../models/Tournament.model';
-import { startTournament } from '../services/tournament.service'; // Импортируем нашу функцию
 
 import Transaction from '../models/Transaction.model';
 import GameRecord from '../models/GameRecord.model';
@@ -136,21 +135,6 @@ export const deleteTournament = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Принудительный запуск турнира по ID
- */
-export const startTournamentManually = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    
-    const io: Server = req.app.get('io');
-
-    try {
-        await startTournament(id, io);
-        res.json({ message: 'The tournament has been successfully launched.' });
-    } catch (error: any) {
-        res.status(500).json({ message: 'Error when starting the tournament', error: error.message });
-    }
-};
 
 /**
  * [ADMIN] Получить список всех пользователей

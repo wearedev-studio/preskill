@@ -9,11 +9,13 @@ export interface ITournament {
     name: string;
     status: 'REGISTERING' | 'ACTIVE' | 'FINISHED' | 'CANCELLED';
     entryFee: number;
+    prizePool: number;
     maxPlayers: number;
     players: string[]; // Массив ID игроков
-    startTime: string;
     bracket: any[]; // Пока оставим any для гибкости
     createdAt: string;
+    platformCommission: number;
+    firstRegistrationTime?: string; // Время первой регистрации для 15-секундного таймера
 }
 
 /**

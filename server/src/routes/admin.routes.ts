@@ -6,7 +6,6 @@ import {
     createTournament,
     updateTournament,
     deleteTournament,
-    startTournamentManually,
     getAllUsers,
     getUserById,
     updateUser,
@@ -15,7 +14,7 @@ import {
     getAllGameRecords,
     getKycSubmissions,
     reviewKycSubmission,
-    getKycDocument 
+    getKycDocument
 } from '../controllers/admin.controller';
 import { adminProtect } from '../middleware/admin.middleware';
 
@@ -29,7 +28,6 @@ router.route('/tournaments').post(adminProtect, createTournament);
 router.route('/tournaments/:id')
     .put(adminProtect, updateTournament)
     .delete(adminProtect, deleteTournament);
-router.route('/tournaments/:id/start').post(adminProtect, startTournamentManually);
 
 // --- НОВЫЕ РОУТЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ---
 router.route('/users').get(adminProtect, getAllUsers);

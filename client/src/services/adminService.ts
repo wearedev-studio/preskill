@@ -27,11 +27,3 @@ export const createLobbyRoom = async (roomData: { gameType: string, bet: number 
     const { data } = await axios.post(`${API_URL}/api/admin/create-room`, roomData);
     return data;
 }
-
-/**
- * Отправляет запрос на принудительный старт турнира
- */
-export const forceStartTournament = async (id: string): Promise<{ message: string }> => {
-    const { data } = await axios.post(`${API_URL}/api/admin/tournaments/${id}/start`);
-    return data;
-};

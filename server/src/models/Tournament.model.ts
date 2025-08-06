@@ -32,6 +32,8 @@ export interface ITournament extends Document {
     maxPlayers: number;
     players: Types.ObjectId[];
     bracket: IRound[];
+    platformCommission: number; // Комиссия платформы в процентах (по умолчанию 10%)
+    firstRegistrationTime?: Date; // Время первой регистрации для 15-секундного таймера
 }
 
 const matchSchema = new Schema({
@@ -60,7 +62,7 @@ const tournamentSchema = new Schema<ITournament>({
         default: 'REGISTERING',
     },
     entryFee: { type: Number, required: true, default: 0 },
-    prizePool: { type: Number, default: 0 }, // Новое поле
+    prizePool: { type: Number, default: 0 },
     maxPlayers: {
         type: Number,
         required: true,
@@ -69,6 +71,8 @@ const tournamentSchema = new Schema<ITournament>({
     },
     players: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     bracket: [roundSchema],
+    platformCommission: { type: Number, default: 10 }, // 10% комиссия по умолчанию
+    firstRegistrationTime: { type: Date }, // Время первой регистрации для 15-секундного таймера
 }, {
     timestamps: true,
 });

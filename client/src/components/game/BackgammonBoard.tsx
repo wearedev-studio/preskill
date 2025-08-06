@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import styles from './BackgammonBoard.module.css';
 
 // Типы для нард
@@ -52,6 +52,8 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
 }) => {
     const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
     const [possibleMoves, setPossibleMoves] = useState<number[]>([]);
+    const [isRollingDice, setIsRollingDice] = useState(false);
+    const [movingPiece, setMovingPiece] = useState<{from: number, to: number} | null>(null);
 
     console.log('[BackgammonBoard] Render:', {
         isMyTurn,
@@ -194,9 +196,7 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
                     };
 
                     console.log('[BackgammonBoard] Sending move:', move);
-                    onMove(move);
-                    setSelectedPoint(null);
-                    setPossibleMoves([]);
+                    handleMoveWithAnimation(move);
                 } else {
                     console.log('[BackgammonBoard] Invalid die value:', dieValue);
                 }
@@ -241,14 +241,48 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
         }
     }, [selectedPoint, possibleMoves, handlePointClick]);
 
-    // Рендер фигуры
-    const renderPiece = useCallback((piece: BackgammonPiece, index: number) => {
-        const pieceClass = `${styles.piece} ${piece.color === 'white' ? styles.whitePiece : styles.blackPiece}`;
+    // Обработка броска костей с анимацией
+    const handleRollDice = useCallback(() => {
+        setIsRollingDice(true);
+        onRollDice();
+        
+        // Анимация длится 1.5 секунды
+        setTimeout(() => {
+            setIsRollingDice(false);
+        }, 1500);
+    }, [onRollDice]);
+
+    // Анимация движения фигуры
+    const animateMove = useCallback((from: number, to: number) => {
+        setMovingPiece({ from, to });
+        setTimeout(() => {
+            setMovingPiece(null);
+        }, 500);
+    }, []);
+
+    // Обработка хода с анимацией
+    const handleMoveWithAnimation = useCallback((move: BackgammonMove) => {
+        animateMove(move.from, move.to);
+        setTimeout(() => {
+            onMove(move);
+            setSelectedPoint(null);
+            setPossibleMoves([]);
+        }, 250);
+    }, [onMove, animateMove]);
+
+    // Рендер фигуры с анимациями
+    const renderPiece = useCallback((piece: BackgammonPiece, index: number, pointIndex?: number) => {
+        const isMoving = movingPiece && pointIndex !== undefined &&
+            (pointIndex === movingPiece.from || pointIndex === movingPiece.to);
+        
+        const pieceClass = `${styles.piece} ${piece.color === 'white' ? styles.whitePiece : styles.blackPiece} ${
+            isMoving ? styles.pieceMoving : ''
+        }`;
         
         return (
             <div key={index} className={pieceClass} />
         );
-    }, []);
+    }, [movingPiece]);
 
     // Рендер точки
     const renderPoint = useCallback((pointIndex: number, isTop: boolean) => {
@@ -274,7 +308,7 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
             >
                 <div className={triangleClass} />
                 <div className={piecesClass}>
-                    {point.pieces.slice(0, 5).map((piece, index) => renderPiece(piece, index))}
+                    {point.pieces.slice(0, 5).map((piece, index) => renderPiece(piece, index, pointIndex))}
                     {point.pieces.length > 5 && (
                         <div className={styles.pieceCount}>
                             {point.pieces.length}
@@ -285,25 +319,40 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
         );
     }, [gameState.board, selectedPoint, possibleMoves, handlePointClick, renderPiece]);
 
-    // Рендер костей
+    // Рендер костей с анимацией
     const renderDice = useCallback(() => {
-        if (!gameState.diceRoll) return null;
+        if (!gameState.diceRoll && !isRollingDice) return null;
 
         return (
             <div className={styles.diceContainer}>
-                {gameState.diceRoll.dice.map((die, index) => (
-                    <div key={index} className={styles.die}>
-                        {die}
-                    </div>
-                ))}
-                {gameState.diceRoll.availableMoves.map((move, index) => (
-                    <div key={`move-${index}`} className={`${styles.die} ${styles.usedDie}`}>
-                        {move}
-                    </div>
-                ))}
+                {isRollingDice ? (
+                    // Показываем анимацию броска
+                    <>
+                        <div className={`${styles.die} ${styles.diceRolling}`}>
+                            ?
+                        </div>
+                        <div className={`${styles.die} ${styles.diceRolling}`}>
+                            ?
+                        </div>
+                    </>
+                ) : gameState.diceRoll ? (
+                    // Показываем результат броска
+                    <>
+                        {gameState.diceRoll.dice.map((die, index) => (
+                            <div key={index} className={styles.die}>
+                                {die}
+                            </div>
+                        ))}
+                        {gameState.diceRoll.availableMoves.map((move, index) => (
+                            <div key={`move-${index}`} className={`${styles.die} ${styles.usedDie}`}>
+                                {move}
+                            </div>
+                        ))}
+                    </>
+                ) : null}
             </div>
         );
-    }, [gameState.diceRoll]);
+    }, [gameState.diceRoll, isRollingDice]);
 
     return (
         <div className={styles.backgammonBoard}>
@@ -320,11 +369,12 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
 
                 <div className={styles.diceSection}>
                     {isMyTurn && gameState.turnPhase === 'ROLLING' && !isGameFinished && (
-                        <button 
-                            onClick={onRollDice} 
+                        <button
+                            onClick={handleRollDice}
                             className={styles.rollButton}
+                            disabled={isRollingDice}
                         >
-                            Бросить кости
+                            {isRollingDice ? 'Бросаем...' : 'Бросить кости'}
                         </button>
                     )}
                     {renderDice()}
@@ -395,10 +445,10 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
                     onClick={() => handlePointClick(-1)}
                 >
                     <div className={styles.barPieces}>
-                        {gameState.bar.white.map((piece, index) => renderPiece(piece, index))}
+                        {gameState.bar.white.map((piece, index) => renderPiece(piece, index, -1))}
                     </div>
                     <div className={styles.barPieces}>
-                        {gameState.bar.black.map((piece, index) => renderPiece(piece, index))}
+                        {gameState.bar.black.map((piece, index) => renderPiece(piece, index, -1))}
                     </div>
                 </div>
 
@@ -409,10 +459,10 @@ const BackgammonBoard: React.FC<BackgammonBoardProps> = ({
                 >
                     <div className={styles.bearOffLabel}>ВЫВОД</div>
                     <div className={styles.bearOffPieces}>
-                        {gameState.home.white.map((piece, index) => renderPiece(piece, index))}
+                        {gameState.home.white.map((piece, index) => renderPiece(piece, index, -2))}
                     </div>
                     <div className={styles.bearOffPieces}>
-                        {gameState.home.black.map((piece, index) => renderPiece(piece, index))}
+                        {gameState.home.black.map((piece, index) => renderPiece(piece, index, -2))}
                     </div>
                 </div>
             </div>

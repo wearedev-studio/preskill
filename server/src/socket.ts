@@ -294,25 +294,29 @@ export const initializeSocket = (io: Server) => {
                 // @ts-ignore
                 p.user._id.toString() === initialUser._id.toString()
             );
-            if (playerInRoom) {
+            if (playerInRoom && playerInRoom.socketId !== socket.id) {
+                console.log(`[Tournament] Updating socketId for player ${initialUser.username} from ${playerInRoom.socketId} to ${socket.id}`);
                 playerInRoom.socketId = socket.id;
             }
             
             socket.join(roomId);
             console.log(`[Tournament] Player ${initialUser.username} joined room ${roomId}`);
             
-            // Отправляем текущее состояние игры
-            socket.emit('gameStart', getPublicRoomState(room));
+            // Отправляем текущее состояние игры всем в комнате
+            io.to(roomId).emit('gameStart', getPublicRoomState(room));
             
             // Проверяем, все ли реальные игроки подключились
             const realPlayers = room.players.filter(p => !isBot(p));
             const connectedRealPlayers = realPlayers.filter(p => {
                 const socketExists = io.sockets.sockets.has(p.socketId);
+                console.log(`[Tournament] Player ${p.user.username} socket ${p.socketId} exists: ${socketExists}`);
                 return socketExists;
             });
             
-            if (connectedRealPlayers.length === realPlayers.length) {
-                console.log(`[Tournament] All players connected to match ${roomId}, starting game`);
+            console.log(`[Tournament] Connected real players: ${connectedRealPlayers.length}/${realPlayers.length}`);
+            
+            if (connectedRealPlayers.length === realPlayers.length && realPlayers.length > 0) {
+                console.log(`[Tournament] All players connected to match ${roomId}, broadcasting game update`);
                 io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
             }
         });

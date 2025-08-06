@@ -1,16 +1,16 @@
 import React, {useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getTournamentById, registerForTournament, ITournament } from '../../services/tournamentService';
-import { forceStartTournament } from '../../services/adminService';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import styles from './TournamentDetailPage.module.css';
-import { Trophy, Users, DollarSign, Calendar, Clock, Crown, Play, Settings } from 'lucide-react';
+import { Trophy, Users, DollarSign, Calendar, Clock, Crown, Play } from 'lucide-react';
 
 const TournamentDetailPage: React.FC = () => {
-        const { id } = useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
     const { user, refreshUser } = useAuth();
     const { socket } = useSocket();
+    const navigate = useNavigate();
     const [tournament, setTournament] = useState<ITournament | null>(null);
     const [activeMatchRoomId, setActiveMatchRoomId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -47,12 +47,17 @@ const TournamentDetailPage: React.FC = () => {
             }
         };
 
-        const handleMatchReady = ({ tournamentId, roomId }: { tournamentId: string, roomId: string }) => {
-            console.log('Match ready:', { tournamentId, roomId });
-            if (tournamentId === id) {
-                setActiveMatchRoomId(roomId);
-                // Показываем уведомление пользователю
-                alert('Ваш матч готов! Нажмите кнопку "JOIN NOW" чтобы присоединиться.');
+        const handleMatchReady = ({ tournamentId, roomId, playerId }: { tournamentId: string, roomId: string, playerId?: string }) => {
+            console.log('Match ready:', { tournamentId, roomId, playerId });
+            if (tournamentId === id && tournament) {
+                // Проверяем, что событие предназначено для текущего пользователя (если указан playerId)
+                if (!playerId || playerId === user?._id) {
+                    console.log('Automatically redirecting to tournament game:', roomId);
+                    // Автоматически перенаправляем игрока к турнирной игре
+                    navigate(`/game/${tournament.gameType}/${roomId}`);
+                } else {
+                    console.log('Match ready event not for current user');
+                }
             }
         };
 
@@ -72,28 +77,17 @@ const TournamentDetailPage: React.FC = () => {
             await refreshUser();
             fetchTournament();
         } catch (err: any) {
-            alert(`Registration error: ${err.response?.data?.message || 'Try again'}`);
+            alert(`Ошибка регистрации: ${err.response?.data?.message || 'Попробуйте снова'}`);
         }
     };
 
-    const handleForceStart = async () => {
-        if (!id) return;
-        if (window.confirm('Are you sure you want to start the tournament now? Empty slots will be filled with bots.')) {
-            try {
-                const res = await forceStartTournament(id);
-                alert(res.message);
-            } catch (err: any) {
-                alert(`Error: ${err.response?.data?.message || 'Failed to start tournament'}`);
-            }
-        }
-    };
 
     if (loading) return <div>Loading tournament...</div>;
     if (error) return <div>{error}</div>;
     if (!tournament) return <div>Tournament not found.</div>;
 
     const canRegister = tournament.status === 'REGISTERING' && !isRegistered && tournament.players.length < tournament.maxPlayers;
-    const statusText: { [key: string]: string } = { REGISTERING: 'Registration', ACTIVE: 'Active', FINISHED: 'Completed' };
+    const statusText: { [key: string]: string } = { REGISTERING: 'Набор игроков', ACTIVE: 'Активный', FINISHED: 'Завершен' };
     const statusStyle: { [key: string]: string } = { REGISTERING: styles.statusRegistering, ACTIVE: styles.statusActive, FINISHED: styles.statusFinished };
 
     return (
@@ -108,41 +102,43 @@ const TournamentDetailPage: React.FC = () => {
                         </div>
                     </div>
                     <div className={styles.prizePool}>
-                        {/* @ts-ignore */}
-                        <p className={styles.prizePoolValue}>${tournament.prizePool.toLocaleString()}</p>
-                        <p className={styles.prizePoolLabel}>Prize fund</p>
+                        <p className={styles.prizePoolValue}>${tournament.prizePool?.toLocaleString() || '0'}</p>
+                        <p className={styles.prizePoolLabel}>Призовой фонд</p>
                     </div>
                 </div>
 
                 <div className={styles.detailsGrid}>
-                    <div className={styles.detailItem}><Users size={20} /><p>{tournament.players.length}/{tournament.maxPlayers} players</p></div>
-                    <div className={styles.detailItem}><DollarSign size={20} /><p>${tournament.entryFee} contribution</p></div>
-                    <div className={styles.detailItem}><Calendar size={20} /><p>{new Date(tournament.startTime).toLocaleDateString()}</p></div>
+                    <div className={styles.detailItem}><Users size={20} /><p>{tournament.players.length}/{tournament.maxPlayers} игроков</p></div>
+                    <div className={styles.detailItem}><DollarSign size={20} /><p>${tournament.entryFee} взнос</p></div>
+                    <div className={styles.detailItem}><Calendar size={20} /><p>{new Date(tournament.createdAt).toLocaleDateString()}</p></div>
                     <div className={styles.detailItem}><Clock size={20} /><span className={`${styles.statusBadge} ${statusStyle[tournament.status]}`}>{statusText[tournament.status]}</span></div>
                 </div>
 
                 {isRegistered && (
                     <div className={styles.registrationStatus}>
-                        <Crown size={20} /><span>You are registered in this tournament!</span>
+                        <Crown size={20} /><span>Вы зарегистрированы в этом турнире!</span>
                     </div>
                 )}
 
                 <div className={styles.actions}>
-                    {activeMatchRoomId ? (
-                        <Link to={`/game/${tournament.gameType}/${activeMatchRoomId}`}>
-                            <button className={`${styles.actionButton} ${styles.btnGreen}`}><Play /><span>YOUR MATCH IS READY! JOIN NOW</span></button>
-                        </Link>
-                    ) : canRegister ? (
-                        <button onClick={handleRegister} className={`${styles.actionButton} ${styles.btnBlue}`}><Trophy /><span>Register for ${tournament.entryFee}</span></button>
+                    {canRegister ? (
+                        <button onClick={handleRegister} className={`${styles.actionButton} ${styles.btnBlue}`}><Trophy /><span>Играть за ${tournament.entryFee}$</span></button>
+                    ) : tournament.status === 'REGISTERING' && tournament.players.length < tournament.maxPlayers ? (
+                        <div className={styles.waitingMessage}>
+                            <Clock size={20} />
+                            <span>Ожидание игроков... ({tournament.players.length}/{tournament.maxPlayers})</span>
+                        </div>
+                    ) : tournament.status === 'ACTIVE' && isRegistered ? (
+                        <div className={styles.waitingMessage}>
+                            <Clock size={20} />
+                            <span>Турнир активен. Ожидание вашего матча...</span>
+                        </div>
                     ) : null}
-                    {user?.role === 'ADMIN' && tournament.status === 'REGISTERING' && (
-                        <button onClick={handleForceStart} className={`${styles.actionButton} ${styles.btnOrange}`}><Settings /><span>Force start</span></button>
-                    )}
                 </div>
             </div>
 
             <div className={styles.card}>
-                <h2 style={{fontSize: '1.5rem', fontWeight: 700, color: 'white', marginBottom: '1.5rem'}}>Tournament grid</h2>
+                <h2 style={{fontSize: '1.5rem', fontWeight: 700, color: 'white', marginBottom: '1.5rem'}}>Турнирная сетка</h2>
                 {tournament.bracket && tournament.bracket.length > 0 ? (
                     <div className={styles.bracketContainer}>
                         <div className={styles.bracket}>
@@ -169,9 +165,9 @@ const TournamentDetailPage: React.FC = () => {
                 ) : (
                     <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                         {tournament.status === 'REGISTERING' ? (
-                            <p>Tournament bracket will be generated when the tournament starts.</p>
+                            <p>Турнирная сетка будет сгенерирована при запуске турнира.</p>
                         ) : (
-                            <p>No bracket available.</p>
+                            <p>Сетка недоступна.</p>
                         )}
                     </div>
                 )}

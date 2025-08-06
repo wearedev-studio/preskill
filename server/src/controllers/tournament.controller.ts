@@ -28,6 +28,9 @@ export const getTournamentDetails = async (req: Request, res: Response) => {
     }
 };
 
+// Хранилище активных таймеров турниров
+const tournamentTimers = new Map<string, NodeJS.Timeout>();
+
 /**
  * Регистрация текущего пользователя в турнире
  */
@@ -54,19 +57,67 @@ export const registerInTournament = async (req: Request, res: Response) => {
         await user.save();
         await Transaction.create({ user: userId, type: 'TOURNAMENT_FEE', amount: tournament.entryFee });
 
-        // 2. Добавляем игрока в турнир и увеличиваем призовой фонд
+        // 2. Добавляем игрока в турнир
         // @ts-ignore
         tournament.players.push(userId);
-        tournament.prizePool += tournament.entryFee;
+        
+        // 3. Устанавливаем время первой регистрации, если это первый игрок
+        if (tournament.players.length === 1) {
+            tournament.firstRegistrationTime = new Date();
+        }
+        
+        // 4. Рассчитываем призовой фонд с учетом комиссии
+        const totalFees = tournament.entryFee * (tournament.players.length);
+        const commission = Math.floor(totalFees * (tournament.platformCommission / 100));
+        tournament.prizePool = totalFees - commission;
+        
         await tournament.save();
         
-        // 3. Оповещаем всех через сокеты, что данные турнира обновились
+        // 5. Оповещаем всех через сокеты, что данные турнира обновились
         const io: Server = req.app.get('io');
         io.emit('tournamentUpdated', { tournamentId });
+
+        // 6. Логика запуска турнира
+        if (tournament.players.length >= tournament.maxPlayers) {
+            // Турнир заполнен - запускаем немедленно
+            const { startTournament } = await import('../services/tournament.service');
+            
+            // Отменяем таймер, если он был установлен
+            if (tournamentTimers.has(tournamentId)) {
+                clearTimeout(tournamentTimers.get(tournamentId)!);
+                tournamentTimers.delete(tournamentId);
+            }
+            
+            setTimeout(() => {
+                startTournament(tournamentId, io);
+            }, 2000); // Небольшая задержка для обновления UI
+        } else if (tournament.players.length === 1) {
+            // Первый игрок зарегистрировался - запускаем 15-секундный таймер
+            console.log(`[Tournament] Starting 15-second timer for tournament ${tournamentId}`);
+            
+            const timer = setTimeout(async () => {
+                try {
+                    // Проверяем, что турнир все еще в статусе регистрации
+                    const currentTournament = await Tournament.findById(tournamentId);
+                    if (currentTournament && currentTournament.status === 'REGISTERING') {
+                        console.log(`[Tournament] 15-second timer expired for tournament ${tournamentId}, starting with ${currentTournament.players.length} players`);
+                        const { startTournament } = await import('../services/tournament.service');
+                        startTournament(tournamentId, io);
+                    }
+                } catch (error) {
+                    console.error(`[Tournament] Error in timer for tournament ${tournamentId}:`, error);
+                } finally {
+                    tournamentTimers.delete(tournamentId);
+                }
+            }, 15000); // 15 секунд
+            
+            tournamentTimers.set(tournamentId, timer);
+        }
 
         res.json({ message: 'Вы успешно зарегистрировались в турнире!' });
 
     } catch (error) {
+        console.error('Tournament registration error:', error);
         res.status(500).json({ message: 'Ошибка сервера при регистрации.' });
     }
 };

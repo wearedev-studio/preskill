@@ -18,17 +18,32 @@ function shuffleArray(array: any[]) {
  * Создает игровую комнату для турнирного матча и оповещает игроков
  */
 async function createTournamentMatchRoom(io: Server, tournament: ITournament, match: any) {
+    console.log(`[Tournament] Creating match room for tournament ${tournament.name}, match ${match.matchId}`);
+    console.log(`[Tournament] Match players:`, match.players.map((p: any) => `${p.username} (bot: ${p.isBot})`));
+    
     const realPlayers = match.players.filter((p: any) => !p.isBot);
     
-    // Если играют только боты, сразу определяем случайного победителя
+    // Если играют только боты, имитируем игру с задержкой
     if (realPlayers.length === 0) {
         const winner = match.players[Math.floor(Math.random() * 2)];
         console.log(`[Tournament] Bot vs Bot match: ${match.players[0].username} vs ${match.players[1].username}, winner: ${winner.username}`);
-        return advanceTournamentWinner(io, tournament._id!.toString(), match.matchId, winner);
+        
+        // Имитируем время игры (от 30 секунд до 2 минут)
+        const gameTime = Math.random() * (120000 - 30000) + 30000;
+        setTimeout(() => {
+            advanceTournamentWinner(io, tournament._id!.toString(), match.matchId, winner);
+        }, gameTime);
+        return;
     }
 
     const roomId = `tourney-${tournament._id}-match-${match.matchId}`;
+    console.log(`[Tournament] Creating room with ID: ${roomId}`);
+    
     const gameLogic = gameLogics[tournament.gameType];
+    if (!gameLogic) {
+        console.error(`[Tournament] No game logic found for game type: ${tournament.gameType}`);
+        return;
+    }
     
     // Создаем игроков для комнаты (включая ботов)
     const roomPlayers = [];
@@ -44,61 +59,116 @@ async function createTournamentMatchRoom(io: Server, tournament: ITournament, ma
                     balance: 9999
                 }
             });
+            console.log(`[Tournament] Added bot player: ${player.username}`);
         } else {
             // Для реального игрока ищем его сокет
             const socketId = userSocketMap[player._id.toString()];
+            console.log(`[Tournament] Looking for socket for player ${player.username} (${player._id}): ${socketId}`);
+            console.log(`[Tournament] Current userSocketMap:`, Object.keys(userSocketMap));
+            
             if (socketId) {
                 const socket = io.sockets.sockets.get(socketId);
                 if (socket) {
                     roomPlayers.push({ socketId, user: (socket as any).user });
+                    console.log(`[Tournament] Added real player: ${player.username} with socket ${socketId}`);
+                } else {
+                    console.log(`[Tournament] Socket ${socketId} not found for player ${player.username}`);
+                    // Попробуем добавить игрока без активного сокета
+                    roomPlayers.push({
+                        socketId: 'offline_player',
+                        user: {
+                            _id: player._id,
+                            username: player.username,
+                            avatar: 'default_avatar.png',
+                            balance: 0
+                        }
+                    });
+                    console.log(`[Tournament] Added offline player: ${player.username}`);
                 }
+            } else {
+                console.log(`[Tournament] No socket mapping found for player ${player.username}`);
+                // Попробуем добавить игрока без активного сокета
+                roomPlayers.push({
+                    socketId: 'offline_player',
+                    user: {
+                        _id: player._id,
+                        username: player.username,
+                        avatar: 'default_avatar.png',
+                        balance: 0
+                    }
+                });
+                console.log(`[Tournament] Added offline player: ${player.username}`);
             }
         }
     }
 
-    // Если не удалось найти всех реальных игроков, откладываем матч
-    if (roomPlayers.length !== match.players.length) {
-        console.log(`[Tournament] Not all players found for match ${match.matchId}, retrying later`);
+    // Проверяем, что у нас есть хотя бы игроки для матча
+    if (roomPlayers.length === 0) {
+        console.log(`[Tournament] No players found for match ${match.matchId}, retrying later`);
         setTimeout(() => createTournamentMatchRoom(io, tournament, match), 5000);
         return;
     }
+    
+    console.log(`[Tournament] Created room with ${roomPlayers.length} players for match ${match.matchId}`);
 
+    console.log(`[Tournament] Creating initial game state for ${tournament.gameType}`);
+    const initialGameState = gameLogic.createInitialState(roomPlayers);
+    
     const newRoom: Room = {
         id: roomId,
         gameType: tournament.gameType,
         bet: 0, // В турнирах нет ставок
         players: roomPlayers,
-        gameState: gameLogic.createInitialState(roomPlayers),
+        gameState: initialGameState,
     };
     rooms[roomId] = newRoom;
+    console.log(`[Tournament] Room ${roomId} created and added to rooms`);
 
     // Сохраняем ID комнаты в базе данных
     const round = tournament.bracket.find(r => r.matches.some(m => m.matchId === match.matchId));
     const matchInDB = round?.matches.find(m => m.matchId === match.matchId);
-    if (matchInDB) matchInDB.roomId = roomId;
+    if (matchInDB) {
+        matchInDB.roomId = roomId;
+        // Сохраняем изменения в базе данных
+        await Tournament.findByIdAndUpdate(tournament._id, tournament);
+        console.log(`[Tournament] Saved roomId ${roomId} to database for match ${match.matchId}`);
+    }
 
-    // Оповещаем только реальных игроков
-    for (const player of roomPlayers) {
-        if (!player.user._id.toString().startsWith('bot-')) {
-            const socket = io.sockets.sockets.get(player.socketId);
-            if (socket) {
-                socket.join(roomId);
-                io.to(socket.id).emit('matchReady', { 
-                    tournamentId: tournament._id, 
-                    roomId 
-                });
+    // Оповещаем всех реальных игроков из исходного матча
+    for (const player of match.players) {
+        if (!player.isBot) {
+            console.log(`[Tournament] Processing real player: ${player.username} (${player._id})`);
+            
+            // Ищем активный сокет игрока
+            const socketId = userSocketMap[player._id.toString()];
+            if (socketId) {
+                const socket = io.sockets.sockets.get(socketId);
+                if (socket) {
+                    socket.join(roomId);
+                    console.log(`[Tournament] Player ${player.username} joined room ${roomId}`);
+                    
+                    io.to(socket.id).emit('matchReady', {
+                        tournamentId: tournament._id,
+                        roomId
+                    });
+                    console.log(`[Tournament] Sent matchReady event to ${player.username}`);
 
-                // Отправляем уведомление
-                createNotification(io, (socket as any).user._id.toString(), {
-                    title: `⚔️ Ваш матч в турнире "${tournament.name}" готов!`,
-                    message: 'Нажмите, чтобы присоединиться.',
-                    link: `/tournaments/${tournament._id}`
-                });
+                    // Отправляем уведомление
+                    createNotification(io, player._id.toString(), {
+                        title: `⚔️ Ваш матч в турнире "${tournament.name}" готов!`,
+                        message: 'Переходим к игре...',
+                        link: `/tournaments/${tournament._id}`
+                    });
+                } else {
+                    console.log(`[Tournament] Socket ${socketId} not found for player ${player.username}`);
+                }
+            } else {
+                console.log(`[Tournament] No socket mapping found for player ${player.username}`);
             }
         }
     }
 
-    console.log(`[Tournament] Created match room ${roomId} for tournament ${tournament.name}`);
+    console.log(`[Tournament] Successfully created match room ${roomId} for tournament ${tournament.name}`);
 }
 
 /**
@@ -175,6 +245,8 @@ export async function advanceTournamentWinner(io: Server, tournamentId: string, 
                 });
             }
             
+            console.log(`[Tournament] ${tournament.name} finished. Winner: ${tournamentWinner.username}, Prize: ${tournament.prizePool}$`);
+            
             console.log(`[Tournament] ${tournament.name} finished. Winner: ${tournamentWinner.username}`);
         } else {
             // Создаем следующий раунд
@@ -224,15 +296,17 @@ export async function startTournament(tournamentId: string, io: Server) {
             return;
         }
         
-        console.log(`[Tournament Service] Starting tournament ${tournament.name} with ${tournament.players.length} players`);
+        console.log(`[Tournament Service] Starting tournament ${tournament.name} with ${tournament.players.length} real players`);
 
         // Добавляем ботов до нужного количества
         const neededBots = tournament.maxPlayers - tournament.players.length;
         const botPlayers: ITournamentPlayer[] = Array.from({ length: neededBots }, (_, i) => ({
             _id: `bot-${Date.now()}-${i}`,
             isBot: true,
-            username: botUsernames[Math.floor(Math.random() * botUsernames.length)] + `_${i + 1}`,
+            username: botUsernames[Math.floor(Math.random() * botUsernames.length)] + `_Bot${i + 1}`,
         }));
+        
+        console.log(`[Tournament Service] Adding ${neededBots} bots to fill tournament`);
 
         // Преобразуем реальных игроков в ITournamentPlayer
         const realPlayers: ITournamentPlayer[] = await Promise.all(
@@ -279,51 +353,26 @@ export async function startTournament(tournamentId: string, io: Server) {
 }
 
 /**
- * Инициализация CRON-задачи
+ * Инициализация системы турниров
  */
 export const initializeTournamentScheduler = (io: Server) => {
-    // Запускаем проверку каждую минуту
-    cron.schedule('* * * * *', async () => {
+    // Очищаем старые турниры в статусе REGISTERING без игроков
+    cron.schedule('0 */6 * * *', async () => { // Каждые 6 часов
         try {
-            const now = new Date();
-            const oneMinuteWarningTime = new Date(now.getTime() + 60 * 1000);
-
-            // Находим турниры, которые скоро начнутся
-            const warningTournaments = await Tournament.find({
-                startTime: { $gt: now, $lte: oneMinuteWarningTime },
+            const oldTournaments = await Tournament.find({
                 status: 'REGISTERING',
+                players: { $size: 0 },
+                createdAt: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Старше 24 часов
             });
             
-            for (const tournament of warningTournaments) {
-                for (const playerId of tournament.players) {
-                    await createNotification(io, playerId.toString(), {
-                        title: '⏰ Турнир скоро начнется!',
-                        message: `Турнир "${tournament.name}" начнется через минуту.`,
-                        link: `/tournaments/${tournament._id}`
-                    });
-                }
-            }
-
-            // Находим турниры, которые должны начаться
-            const dueTournaments = await Tournament.find({
-                startTime: { $lte: now },
-                status: 'REGISTERING',
-            });
-            
-            for (const tournament of dueTournaments) {
-                if (tournament.players.length > 0) {
-                    await startTournament(tournament._id!.toString(), io);
-                } else {
-                    // Если нет игроков, отменяем турнир
-                    tournament.status = 'CANCELLED';
-                    await tournament.save();
-                    console.log(`[Tournament] Cancelled tournament ${tournament.name} - no players`);
-                }
+            for (const tournament of oldTournaments) {
+                await Tournament.findByIdAndDelete(tournament._id);
+                console.log(`[Tournament] Cleaned up old empty tournament: ${tournament.name}`);
             }
         } catch (error) {
-            console.error('[Tournament Scheduler] Error:', error);
+            console.error('[Tournament Cleanup] Error:', error);
         }
     });
     
-    console.log('[Tournament Scheduler] Initialized');
+    console.log('[Tournament System] Initialized with instant matchmaking');
 };
