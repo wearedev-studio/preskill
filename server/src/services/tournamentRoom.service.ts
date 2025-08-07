@@ -78,7 +78,8 @@ export async function createTournamentRoom(
             gameType,
             players,
             gameState: initialGameState,
-            status: 'WAITING'
+            status: 'WAITING',
+            replayCount: 0
         });
 
         await tournamentRoom.save();
@@ -406,11 +407,25 @@ async function finishTournamentMatch(
     isDraw: boolean = false
 ): Promise<void> {
     try {
-        console.log(`[TournamentRoom] Finishing match ${room.matchId}`);
+        console.log(`[TournamentRoom] Finishing match ${room.matchId}, isDraw: ${isDraw}, replayCount: ${room.replayCount}`);
 
         let winner: ITournamentRoomPlayer | undefined;
         if (winnerId && !isDraw) {
             winner = room.players.find(p => p._id.toString() === winnerId.toString());
+        }
+
+        // Если ничья и это не превышает лимит переигровок
+        if (isDraw && room.replayCount < 3) {
+            console.log(`[TournamentRoom] Draw detected, starting replay ${room.replayCount + 1} for match ${room.matchId}`);
+            await startTournamentReplay(io, room);
+            return;
+        }
+
+        // Если ничья и достигнут лимит переигровок, выбираем случайного победителя
+        if (isDraw && room.replayCount >= 3) {
+            console.log(`[TournamentRoom] Maximum replays reached, selecting random winner for match ${room.matchId}`);
+            winner = room.players[Math.floor(Math.random() * room.players.length)];
+            isDraw = false; // Больше не ничья, есть победитель
         }
 
         // Обновляем статус комнаты
@@ -429,19 +444,15 @@ async function finishTournamentMatch(
         io.to(`tournament-${room.matchId}`).emit('tournamentGameEnd', {
             matchId: room.matchId,
             winner,
-            isDraw
+            isDraw: false // Всегда false, так как либо есть победитель, либо выбран случайный
         });
 
         // Уведомляем игроков о результате матча и статусе в турнире
-        await notifyPlayersAboutMatchResult(io, room, winner, isDraw);
+        await notifyPlayersAboutMatchResult(io, room, winner, false);
 
         // Продвигаем победителя в турнире
         if (winner) {
             await advanceTournamentWinner(io, room.tournamentId.toString(), room.matchId, winner);
-        } else if (isDraw) {
-            // В случае ничьи выбираем случайного победителя
-            const randomWinner = room.players[Math.floor(Math.random() * room.players.length)];
-            await advanceTournamentWinner(io, room.tournamentId.toString(), room.matchId, randomWinner);
         }
 
         // КРИТИЧЕСКИ ВАЖНО: Проверяем, нужно ли создать следующий раунд
@@ -851,6 +862,100 @@ async function finishTournament(io: Server, tournament: ITournament, winner: any
         console.log(`[TournamentRoom] Tournament ${tournament._id} finished successfully`);
     } catch (error) {
         console.error(`[TournamentRoom] Error finishing tournament:`, error);
+    }
+}
+
+/**
+ * Запускает переигровку турнирного матча при ничьей
+ */
+async function startTournamentReplay(io: Server, room: ITournamentRoom): Promise<void> {
+    try {
+        console.log(`[TournamentRoom] Starting replay ${room.replayCount + 1} for match ${room.matchId}`);
+
+        // Увеличиваем счетчик переигровок
+        room.replayCount += 1;
+
+        // Проверяем, что игровая логика существует
+        const gameLogic = gameLogics[room.gameType as keyof typeof gameLogics];
+        if (!gameLogic) {
+            console.error(`[TournamentRoom] No game logic found for ${room.gameType}`);
+            return;
+        }
+
+        // Преобразуем игроков для игровой логики
+        const gamePlayersFormat = convertPlayersForGameLogic(room.players);
+
+        // Создаем новое начальное состояние игры
+        const newGameState = gameLogic.createInitialState(gamePlayersFormat);
+        room.gameState = newGameState;
+        room.status = 'ACTIVE';
+
+        // Обновляем в памяти и базе данных
+        if (tournamentRooms[room.matchId]) {
+            tournamentRooms[room.matchId] = room;
+        }
+        await TournamentRoom.findOneAndUpdate(
+            { matchId: room.matchId },
+            {
+                gameState: newGameState,
+                status: 'ACTIVE',
+                replayCount: room.replayCount,
+                $unset: { winner: 1 } // Убираем победителя
+            }
+        );
+
+        // Уведомляем игроков о переигровке
+        const roomName = `tournament-${room.matchId}`;
+        io.to(roomName).emit('tournamentReplay', {
+            matchId: room.matchId,
+            replayNumber: room.replayCount,
+            gameState: newGameState,
+            message: `Ничья! Начинается переигровка ${room.replayCount}/3`
+        });
+
+        // Отправляем новое состояние игры всем игрокам
+        for (const player of room.players) {
+            if (!player.isBot && player.socketId) {
+                const socket = io.sockets.sockets.get(player.socketId);
+                if (socket) {
+                    socket.emit('tournamentGameStart', {
+                        matchId: room.matchId,
+                        gameType: room.gameType,
+                        players: room.players,
+                        gameState: newGameState,
+                        myPlayerId: player._id,
+                        isReplay: true,
+                        replayNumber: room.replayCount
+                    });
+
+                    // Создаем уведомление о переигровке
+                    await createNotification(io, player._id, {
+                        title: `🔄 Переигровка ${room.replayCount}/3`,
+                        message: `Ничья в турнирном матче! Начинается переигровка`,
+                        link: `/tournament-game/${room.matchId}`
+                    });
+                }
+            }
+        }
+
+        console.log(`[TournamentRoom] Replay ${room.replayCount} started for match ${room.matchId}`);
+
+        // Если первый ход должен сделать бот, запускаем его
+        const currentPlayer = room.players.find(p => p._id.toString() === newGameState.turn?.toString());
+        if (currentPlayer && currentPlayer.isBot) {
+            console.log(`[TournamentRoom] Bot ${currentPlayer.username} should make first move in replay`);
+            
+            setTimeout(async () => {
+                try {
+                    await processTournamentMove(io, null, room.matchId, currentPlayer._id.toString(), { type: 'BOT_MOVE' });
+                } catch (error) {
+                    console.error(`[TournamentRoom] Error in bot move during replay:`, error);
+                }
+            }, 1000);
+        }
+
+    } catch (error) {
+        console.error(`[TournamentRoom] Error starting tournament replay:`, error);
     }
 }
 

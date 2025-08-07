@@ -18,6 +18,7 @@ export interface ITournamentRoom extends Document {
     gameState: any;
     status: 'WAITING' | 'ACTIVE' | 'FINISHED';
     winner?: ITournamentRoomPlayer;
+    replayCount: number; // Количество переигровок
     createdAt: Date;
     updatedAt: Date;
 }
@@ -44,7 +45,8 @@ const tournamentRoomSchema = new Schema<ITournamentRoom>({
         enum: ['WAITING', 'ACTIVE', 'FINISHED'],
         default: 'WAITING'
     },
-    winner: tournamentRoomPlayerSchema
+    winner: tournamentRoomPlayerSchema,
+    replayCount: { type: Number, default: 0 }
 }, {
     timestamps: true
 });

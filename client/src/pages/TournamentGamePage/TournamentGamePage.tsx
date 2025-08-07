@@ -21,6 +21,8 @@ interface TournamentGameState {
     }>;
     gameState: any;
     myPlayerId: string;
+    isReplay?: boolean;
+    replayNumber?: number;
 }
 
 interface TournamentGameResult {
@@ -48,6 +50,13 @@ interface TournamentCompleted {
     prizePool: number;
 }
 
+interface TournamentReplay {
+    matchId: string;
+    replayNumber: number;
+    gameState: any;
+    message: string;
+}
+
 const TournamentGamePage: React.FC = () => {
     const { matchId } = useParams<{ matchId: string }>();
     const [gameData, setGameData] = useState<TournamentGameState | null>(null);
@@ -58,6 +67,7 @@ const TournamentGamePage: React.FC = () => {
     const [matchResult, setMatchResult] = useState<TournamentMatchResult | null>(null);
     const [tournamentCompleted, setTournamentCompleted] = useState<TournamentCompleted | null>(null);
     const [currentMatchId, setCurrentMatchId] = useState<string | undefined>(matchId);
+    const [replayInfo, setReplayInfo] = useState<TournamentReplay | null>(null);
     
     const { user } = useAuth();
     const { socket } = useSocket();
@@ -95,6 +105,7 @@ const TournamentGamePage: React.FC = () => {
             setMatchResult(null);
             setGameError(null);
             setTournamentCompleted(null);
+            setReplayInfo(null);
             setLoading(true);
             setError(null);
         }
@@ -123,6 +134,7 @@ const TournamentGamePage: React.FC = () => {
         socket.on('tournamentMatchResult', handleMatchResult);
         socket.on('tournamentMatchReady', handleNextRoundReady);
         socket.on('tournamentCompleted', handleTournamentCompleted);
+        socket.on('tournamentReplay', handleTournamentReplay);
         socket.on('error', handleError);
 
         return () => {
@@ -134,6 +146,7 @@ const TournamentGamePage: React.FC = () => {
             socket.off('tournamentMatchResult', handleMatchResult);
             socket.off('tournamentMatchReady', handleNextRoundReady);
             socket.off('tournamentCompleted', handleTournamentCompleted);
+            socket.off('tournamentReplay', handleTournamentReplay);
             socket.off('error', handleError);
         };
     }, [currentMatchId, socket, user]);
@@ -149,7 +162,9 @@ const TournamentGamePage: React.FC = () => {
             currentTurn: data.gameState?.turn,
             myPlayerIdType: typeof data.myPlayerId,
             userIdType: typeof user?._id,
-            idsEqual: data.myPlayerId === user?._id
+            idsEqual: data.myPlayerId === user?._id,
+            isReplay: data.isReplay,
+            replayNumber: data.replayNumber
         });
         
         // Проверяем, что myPlayerId соответствует текущему пользователю
@@ -163,6 +178,13 @@ const TournamentGamePage: React.FC = () => {
         setGameData(data);
         setLoading(false);
         setError(null);
+        
+        // Если это переигровка, очищаем предыдущие результаты
+        if (data.isReplay) {
+            setGameResult(null);
+            setMatchResult(null);
+            setReplayInfo(null);
+        }
     };
 
     const handleGameUpdate = (data: { matchId: string; gameState: any }) => {
@@ -236,6 +258,16 @@ const TournamentGamePage: React.FC = () => {
         setTimeout(() => {
             navigate('/tournaments');
         }, 10000);
+    };
+
+    const handleTournamentReplay = (data: TournamentReplay) => {
+        console.log('[TournamentGame] Tournament replay started:', data);
+        setReplayInfo(data);
+        
+        // Показываем информацию о переигровке на 3 секунды
+        setTimeout(() => {
+            setReplayInfo(null);
+        }, 3000);
     };
 
     const handleError = (error: { message: string }) => {
@@ -572,6 +604,11 @@ const TournamentGamePage: React.FC = () => {
                 <h1>Турнирный матч</h1>
                 <div className={styles.gameInfo}>
                     {gameTypeText[gameData.gameType as keyof typeof gameTypeText]}
+                    {gameData.isReplay && (
+                        <span className={styles.replayBadge}>
+                            Переигровка {gameData.replayNumber}/3
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -603,6 +640,15 @@ const TournamentGamePage: React.FC = () => {
                     <div className={styles.errorContent}>
                         <span className={styles.errorIcon}>⚠️</span>
                         <span>{gameError}</span>
+                    </div>
+                </div>
+            )}
+
+            {replayInfo && (
+                <div className={styles.replayNotification}>
+                    <div className={styles.replayContent}>
+                        <span className={styles.replayIcon}>🔄</span>
+                        <span>{replayInfo.message}</span>
                     </div>
                 </div>
             )}
