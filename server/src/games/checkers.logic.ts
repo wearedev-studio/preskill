@@ -285,7 +285,7 @@ export const checkersLogic: IGameLogic = {
             newState.turn = playerId; // Ход остается у текущего игрока
         }
 
-        return { newState, turnShouldSwitch };
+        return { newState, error: undefined, turnShouldSwitch };
     },
 
     checkGameEnd(gameState: CheckersState, players: Room['players']) {

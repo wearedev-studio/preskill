@@ -38,7 +38,19 @@ export async function createTournamentRoom(
             }
         }));
 
+        console.log(`[TournamentRoom] Creating initial state for ${gameType}:`, {
+            players: roomPlayers.map(p => ({ id: p.user._id, username: p.user.username })),
+            gameType
+        });
+
         const initialGameState = gameLogic.createInitialState(roomPlayers);
+        
+        console.log(`[TournamentRoom] Initial game state created:`, {
+            turn: initialGameState.turn,
+            turnType: typeof initialGameState.turn,
+            hasBoard: !!initialGameState.board,
+            gameType
+        });
 
         // Создаем запись в базе данных
         const tournamentRoom = new TournamentRoom({
@@ -126,11 +138,42 @@ export async function joinTournamentRoom(
             return false;
         }
 
+        // Проверяем статус комнаты - если матч уже завершен, не позволяем подключиться
+        if (room.status === 'FINISHED') {
+            console.log(`[TournamentRoom] Match ${matchId} is already finished`);
+            socket.emit('error', { message: 'Этот матч уже завершен' });
+            return false;
+        }
+
         // Проверяем, что игрок участвует в этом матче
         const player = room.players.find(p => p._id === playerId);
         if (!player) {
             console.log(`[TournamentRoom] Player ${playerId} not in match ${matchId}`);
             socket.emit('error', { message: 'Вы не участвуете в этом матче' });
+            return false;
+        }
+
+        // Проверяем статус турнира
+        const Tournament = (await import('../models/Tournament.model')).default;
+        const tournament = await Tournament.findById(room.tournamentId);
+        if (!tournament) {
+            console.log(`[TournamentRoom] Tournament not found for match ${matchId}`);
+            socket.emit('error', { message: 'Турнир не найден' });
+            return false;
+        }
+
+        // Если турнир завершен, не позволяем подключиться
+        if (tournament.status === 'FINISHED') {
+            console.log(`[TournamentRoom] Tournament ${tournament._id} is finished`);
+            socket.emit('error', { message: 'Этот турнир уже завершен' });
+            return false;
+        }
+
+        // Проверяем, не исключен ли игрок из турнира
+        const playerInTournament = tournament.players.find(p => p._id.toString() === playerId);
+        if (!playerInTournament) {
+            console.log(`[TournamentRoom] Player ${playerId} not in tournament`);
+            socket.emit('error', { message: 'Вы не участвуете в этом турнире' });
             return false;
         }
 
@@ -150,7 +193,17 @@ export async function joinTournamentRoom(
             await TournamentRoom.findOneAndUpdate({ matchId }, { status: 'ACTIVE' });
         }
 
-        // Отправляем состояние игры
+        // ВСЕГДА отправляем состояние игры
+        console.log(`[TournamentRoom] Sending game start to player ${playerId}:`, {
+            matchId,
+            gameType: room.gameType,
+            players: room.players.map(p => ({ id: p._id, username: p.username, isBot: p.isBot })),
+            gameStateTurn: room.gameState.turn,
+            myPlayerId: playerId,
+            playerIdType: typeof playerId,
+            gameStateTurnType: typeof room.gameState.turn
+        });
+        
         socket.emit('tournamentGameStart', {
             matchId,
             gameType: room.gameType,
@@ -159,22 +212,28 @@ export async function joinTournamentRoom(
             myPlayerId: playerId
         });
 
-        // Проверяем, нужно ли боту сделать первый ход
+        console.log(`[TournamentRoom] Player ${playerId} joined room ${matchId} successfully`);
+
+        // Проверяем, нужно ли боту сделать первый ход (только если игра только началась)
         const currentPlayer = room.players.find(p => p._id === room.gameState.turn);
         if (currentPlayer && currentPlayer.isBot) {
-            console.log(`[TournamentRoom] Bot ${currentPlayer.username} should start the game`);
+            console.log(`[TournamentRoom] Bot ${currentPlayer.username} should make a move`);
             
-            setTimeout(async () => {
-                try {
-                    // Используем ту же логику, что и в processTournamentMove
-                    await processTournamentMove(io, null, room.matchId, currentPlayer._id, { type: 'BOT_MOVE' });
-                } catch (error) {
-                    console.error(`[TournamentRoom] Error in initial bot move:`, error);
-                }
-            }, 2000); // Задержка для инициализации
+            // Проверяем, что это действительно начало игры (нет предыдущих ходов)
+            const isGameStart = !room.gameState.moveHistory || room.gameState.moveHistory.length === 0;
+            
+            if (isGameStart) {
+                setTimeout(async () => {
+                    try {
+                        // Используем ту же логику, что и в processTournamentMove
+                        await processTournamentMove(io, null, room.matchId, currentPlayer._id, { type: 'BOT_MOVE' });
+                    } catch (error) {
+                        console.error(`[TournamentRoom] Error in initial bot move:`, error);
+                    }
+                }, 2000); // Задержка для инициализации
+            }
         }
 
-        console.log(`[TournamentRoom] Player ${playerId} joined room ${matchId}`);
         return true;
     } catch (error) {
         console.error(`[TournamentRoom] Error joining room:`, error);
@@ -191,22 +250,54 @@ export async function processTournamentMove(
     move: any
 ): Promise<void> {
     try {
+        console.log(`[TournamentRoom] Processing move for player ${playerId} in match ${matchId}`);
+        console.log(`[TournamentRoom] Move data:`, JSON.stringify(move, null, 2));
+
         const room = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
         if (!room || room.status !== 'ACTIVE') {
-            if (socket) socket.emit('error', { message: 'Матч недоступен' });
+            console.log(`[TournamentRoom] Room not found or not active: ${room?.status}`);
+            if (socket) socket.emit('tournamentGameError', { matchId, error: 'Матч недоступен' });
             return;
         }
 
-        const isBot = room.players.find(p => p._id === playerId)?.isBot;
-        if (!isBot && room.gameState.turn && room.gameState.turn.toString() !== playerId.toString()) {
-            if (socket) socket.emit('error', { message: 'Сейчас не ваш ход' });
-            console.log(`[TournamentRoom] Turn check failed: gameState.turn=${room.gameState.turn}, playerId=${playerId}`);
+        const player = room.players.find(p => p._id.toString() === playerId.toString());
+        if (!player) {
+            console.log(`[TournamentRoom] Player not found in room. Available players:`, room.players.map(p => ({ id: p._id, username: p.username })));
+            if (socket) socket.emit('tournamentGameError', { matchId, error: 'Игрок не найден в матче' });
             return;
+        }
+
+        const isBot = player.isBot;
+        console.log(`[TournamentRoom] Player ${player.username} is bot: ${isBot}`);
+        console.log(`[TournamentRoom] Current game state turn: ${room.gameState.turn}`);
+        console.log(`[TournamentRoom] Player ID: ${playerId}`);
+        
+        // Более мягкая проверка очередности хода
+        if (!isBot && room.gameState.turn) {
+            const currentTurn = room.gameState.turn.toString();
+            const playerIdStr = playerId.toString();
+            
+            console.log(`[TournamentRoom] Turn validation:`, {
+                currentTurn,
+                playerIdStr,
+                isEqual: currentTurn === playerIdStr,
+                currentTurnType: typeof currentTurn,
+                playerIdType: typeof playerIdStr,
+                gameStateTurn: room.gameState.turn,
+                playerId: playerId
+            });
+            
+            if (currentTurn !== playerIdStr) {
+                console.log(`[TournamentRoom] Turn check failed: expected ${currentTurn}, got ${playerIdStr}`);
+                if (socket) socket.emit('tournamentGameError', { matchId, error: 'Сейчас не ваш ход' });
+                return;
+            }
         }
 
         const gameLogic = gameLogics[room.gameType as keyof typeof gameLogics];
         if (!gameLogic) {
-            if (socket) socket.emit('error', { message: 'Игровая логика недоступна' });
+            console.log(`[TournamentRoom] No game logic found for ${room.gameType}`);
+            if (socket) socket.emit('tournamentGameError', { matchId, error: 'Игровая логика недоступна' });
             return;
         }
 
@@ -220,9 +311,12 @@ export async function processTournamentMove(
             }
         }));
 
-        let newState, error;
+        console.log(`[TournamentRoom] Room players:`, roomPlayers.map(p => ({ id: p.user._id, username: p.user.username })));
+
+        let result;
 
         if (isBot && move.type === 'BOT_MOVE') {
+            console.log(`[TournamentRoom] Processing bot move`);
             const botPlayerIndex = room.players.findIndex(p => p._id === playerId) as 0 | 1;
             const botMove = gameLogic.makeBotMove(room.gameState, botPlayerIndex);
             
@@ -231,50 +325,66 @@ export async function processTournamentMove(
                 return;
             }
             
-            const result = gameLogic.processMove(room.gameState, botMove, playerId, roomPlayers);
-            newState = result.newState;
-            error = result.error;
+            console.log(`[TournamentRoom] Bot move:`, JSON.stringify(botMove, null, 2));
+            result = gameLogic.processMove(room.gameState, botMove, playerId, roomPlayers);
         }
         else if (room.gameType === 'backgammon' && move.type === 'ROLL_DICE') {
+            console.log(`[TournamentRoom] Processing dice roll`);
             const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
-            const result = rollDiceForBackgammon(room.gameState, playerId, roomPlayers);
-            newState = result.newState;
-            error = result.error;
+            result = rollDiceForBackgammon(room.gameState, playerId, roomPlayers);
         } else {
-            const result = gameLogic.processMove(
-                room.gameState,
-                move,
+            console.log(`[TournamentRoom] Processing regular move`);
+            console.log(`[TournamentRoom] Move details:`, {
+                move: JSON.stringify(move),
                 playerId,
-                roomPlayers
-            );
-            newState = result.newState;
-            error = result.error;
+                gameType: room.gameType,
+                roomPlayersCount: roomPlayers.length,
+                roomPlayers: roomPlayers.map(p => ({ id: p.user._id, username: p.user.username }))
+            });
+            result = gameLogic.processMove(room.gameState, move, playerId, roomPlayers);
         }
 
-        if (error) {
+        console.log(`[TournamentRoom] Game logic result:`, {
+            hasError: !!result.error,
+            error: result.error,
+            hasNewState: !!result.newState,
+            turnShouldSwitch: 'turnShouldSwitch' in result ? result.turnShouldSwitch : 'not specified'
+        });
+
+        if (result.error) {
+            console.log(`[TournamentRoom] Move error: ${result.error}`);
             if (socket) {
                 socket.emit('tournamentGameError', {
                     matchId,
-                    error: error
+                    error: result.error
                 });
             }
-            console.log(`[TournamentRoom] Move error in match ${matchId}: ${error}`);
             return;
         }
 
-        room.gameState = newState;
+        // Обновляем состояние игры
+        room.gameState = result.newState;
         if (tournamentRooms[matchId]) {
             tournamentRooms[matchId] = room;
         }
-        await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: newState });
+        
+        // Сохраняем в базу данных
+        try {
+            await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: result.newState });
+        } catch (dbError) {
+            console.error(`[TournamentRoom] Database update error:`, dbError);
+        }
 
+        // Отправляем обновление всем игрокам
         io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
             matchId,
-            gameState: newState
+            gameState: result.newState
         });
 
-        const gameResult = gameLogic.checkGameEnd(newState, roomPlayers);
-        console.log(`[TournamentRoom] Game result check for match ${matchId}:`, gameResult);
+        console.log(`[TournamentRoom] Game state updated and sent to clients`);
+
+        // Проверяем окончание игры
+        const gameResult = gameLogic.checkGameEnd(result.newState, roomPlayers);
         
         if (gameResult.isGameOver) {
             console.log(`[TournamentRoom] Game over detected for match ${matchId}, winner: ${gameResult.winnerId}, isDraw: ${gameResult.isDraw}`);
@@ -282,104 +392,126 @@ export async function processTournamentMove(
             return;
         }
 
-        const nextPlayer = room.players.find(p => p._id === newState.turn);
-        if (nextPlayer && nextPlayer.isBot) {
-            console.log(`[TournamentRoom] Bot ${nextPlayer.username} should make a move`);
+        // Обрабатываем ход бота если нужно
+        const nextPlayer = room.players.find(p => p._id === result.newState.turn);
+        const shouldScheduleBotMove = nextPlayer && nextPlayer.isBot &&
+            ('turnShouldSwitch' in result ? result.turnShouldSwitch : true);
             
+        if (shouldScheduleBotMove) {
+            console.log(`[TournamentRoom] Scheduling bot move for ${nextPlayer.username}`);
+            
+            // Используем более короткую задержку для ботов
             setTimeout(async () => {
-                try {
-                    const currentRoom = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
-                    if (!currentRoom || currentRoom.status !== 'ACTIVE') return;
-
-                    if (currentRoom.gameType === 'backgammon') {
-                        const botPlayerId = nextPlayer._id;
-                        
-                        if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
-                            const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
-                            const { newState: diceState, error: diceError } = rollDiceForBackgammon(
-                                currentRoom.gameState,
-                                botPlayerId,
-                                roomPlayers
-                            );
-                            
-                            if (diceError) {
-                                console.log('[TournamentBot] Dice roll error:', diceError);
-                                return;
-                            }
-                            
-                            currentRoom.gameState = diceState;
-                            if (tournamentRooms[matchId]) {
-                                tournamentRooms[matchId] = currentRoom;
-                            }
-                            await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: diceState });
-                            
-                            io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
-                                matchId,
-                                gameState: diceState
-                            });
-                            
-                            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
-                                return;
-                            }
-                            
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-                        }
-                    }
-
-                    let botCanMove = true;
-                    let safetyBreak = 0;
-
-                    while (botCanMove && safetyBreak < 10) {
-                        safetyBreak++;
-                        
-                        const botPlayerIndex = currentRoom.players.findIndex(p => p.isBot) as 0 | 1;
-                        const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
-                        
-                        if (!botMove || Object.keys(botMove).length === 0) break;
-
-                        const botProcessResult = gameLogic.processMove(
-                            currentRoom.gameState,
-                            botMove,
-                            nextPlayer._id,
-                            roomPlayers
-                        );
-
-                        if (botProcessResult.error) break;
-
-                        currentRoom.gameState = botProcessResult.newState;
-                        if (tournamentRooms[matchId]) {
-                            tournamentRooms[matchId] = currentRoom;
-                        }
-                        await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: botProcessResult.newState });
-                        
-                        const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, roomPlayers);
-                        if (botGameResult.isGameOver) {
-                            await finishTournamentMatch(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
-                            return;
-                        }
-                        
-                        botCanMove = !botProcessResult.turnShouldSwitch;
-                        
-                        if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
-                            break;
-                        }
-                    }
-
-                    io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
-                        matchId,
-                        gameState: currentRoom.gameState
-                    });
-
-                } catch (error) {
-                    console.error(`[TournamentRoom] Error in bot move:`, error);
-                }
-            }, 1500);
+                await processBotMove(io, matchId, nextPlayer._id, gameLogic, roomPlayers);
+            }, 800);
         }
 
-        console.log(`[TournamentRoom] Processed move in match ${matchId}`);
+        console.log(`[TournamentRoom] Successfully processed move in match ${matchId}`);
     } catch (error) {
         console.error(`[TournamentRoom] Error processing move:`, error);
-        socket.emit('error', { message: 'Ошибка обработки хода' });
+        if (socket) socket.emit('tournamentGameError', { matchId, error: 'Ошибка обработки хода' });
+    }
+}
+
+// Отдельная функция для обработки ходов ботов
+async function processBotMove(
+    io: Server,
+    matchId: string,
+    botPlayerId: string,
+    gameLogic: any,
+    roomPlayers: any[]
+): Promise<void> {
+    try {
+        const currentRoom = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
+        if (!currentRoom || currentRoom.status !== 'ACTIVE') return;
+
+        // Специальная обработка для нард
+        if (currentRoom.gameType === 'backgammon') {
+            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
+                const { newState: diceState, error: diceError } = rollDiceForBackgammon(
+                    currentRoom.gameState,
+                    botPlayerId,
+                    roomPlayers
+                );
+                
+                if (diceError) {
+                    console.log('[TournamentBot] Dice roll error:', diceError);
+                    return;
+                }
+                
+                currentRoom.gameState = diceState;
+                if (tournamentRooms[matchId]) {
+                    tournamentRooms[matchId] = currentRoom;
+                }
+                await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: diceState });
+                
+                io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
+                    matchId,
+                    gameState: diceState
+                });
+                
+                if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                    return;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Выполняем ходы бота
+        let botCanMove = true;
+        let safetyBreak = 0;
+
+        while (botCanMove && safetyBreak < 10) {
+            safetyBreak++;
+            
+            const botPlayerIndex = currentRoom.players.findIndex(p => p._id === botPlayerId) as 0 | 1;
+            const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
+            
+            if (!botMove || Object.keys(botMove).length === 0) break;
+
+            const botProcessResult = gameLogic.processMove(
+                currentRoom.gameState,
+                botMove,
+                botPlayerId,
+                roomPlayers
+            );
+
+            if (botProcessResult.error) {
+                console.log(`[TournamentBot] Bot move error: ${botProcessResult.error}`);
+                break;
+            }
+
+            currentRoom.gameState = botProcessResult.newState;
+            if (tournamentRooms[matchId]) {
+                tournamentRooms[matchId] = currentRoom;
+            }
+            await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: botProcessResult.newState });
+            
+            // Проверяем окончание игры после хода бота
+            const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, roomPlayers);
+            if (botGameResult.isGameOver) {
+                await finishTournamentMatch(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
+                return;
+            }
+            
+            botCanMove = !botProcessResult.turnShouldSwitch;
+            
+            // Для нард: если ход переключился, выходим из цикла
+            if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
+                break;
+            }
+        }
+
+        // Отправляем финальное обновление
+        io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
+            matchId,
+            gameState: currentRoom.gameState
+        });
+
+    } catch (error) {
+        console.error(`[TournamentRoom] Error in bot move processing:`, error);
     }
 }
 
@@ -554,7 +686,7 @@ async function advanceWinnerInTournament(
     }
 }
 
-async function checkAndCreateNextRound(io: Server, tournament: ITournament): Promise<void> {
+export async function checkAndCreateNextRound(io: Server, tournament: ITournament): Promise<void> {
     try {
         console.log(`[TournamentRoom] Checking next round for tournament ${tournament._id}`);
         console.log(`[TournamentRoom] Tournament bracket:`, JSON.stringify(tournament.bracket, null, 2));

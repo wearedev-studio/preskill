@@ -161,7 +161,7 @@ export const chessLogic: IGameLogic = {
         console.log('[Chess] Move processed successfully. New player:', newGameState.currentPlayer);
         console.log('[Chess] Game status:', { isGameOver: gameStatus.isGameOver, isDraw: gameStatus.isDraw });
         
-        return { newState: newGameState, turnShouldSwitch: true };
+        return { newState: newGameState, error: undefined, turnShouldSwitch: true };
     },
 
     checkGameEnd(gameState: ChessState, players: Room['players']) {

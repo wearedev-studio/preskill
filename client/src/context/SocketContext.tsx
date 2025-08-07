@@ -31,10 +31,14 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
       }) => {
         console.log('[Tournament] Match ready, redirecting to game:', data);
         
-        // Автоматически перенаправляем игрока к турнирной игре
+        // Используем React Router для навигации без перезагрузки страницы
         setTimeout(() => {
-          window.location.href = `/tournament-game/${data.matchId}`;
-        }, 2000); // 2 секунды задержки для показа уведомления
+          // Проверяем, не находимся ли мы уже на странице турнирной игры
+          if (!window.location.pathname.includes('/tournament-game/')) {
+            window.history.pushState(null, '', `/tournament-game/${data.matchId}`);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+        }, 1000); // Уменьшаем задержку
       });
 
       setSocket(newSocket);

@@ -8,7 +8,12 @@ import { ticTacToeLogic } from './games/tic-tac-toe.logic';
 import { checkersLogic } from './games/checkers.logic';
 import { chessLogic } from './games/chess.logic';
 import { backgammonLogic, rollDiceForBackgammon } from './games/backgammon.logic';
-import { advanceTournamentWinner } from './services/tournament.service';
+import {
+    advanceTournamentWinner,
+    handleTournamentPlayerLeft,
+    handleTournamentPlayerReturned,
+    handleTournamentPlayerForfeited
+} from './services/tournament.service';
 import {
     joinTournamentRoom,
     processTournamentMove,
@@ -140,6 +145,96 @@ async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolea
     broadcastLobbyState(io, gameType);
 }
 
+// Функция для обработки ходов ботов в обычных играх
+async function processBotMoveInRegularGame(
+    io: Server,
+    roomId: string,
+    nextPlayer: any,
+    gameLogic: any
+): Promise<void> {
+    try {
+        let currentRoom = rooms[roomId];
+        if (!currentRoom) return;
+
+        // Специальная логика для нард - бот должен бросить кости
+        if (currentRoom.gameType === 'backgammon') {
+            // @ts-ignore
+            const botPlayerId = nextPlayer.user._id.toString();
+            
+            // Проверяем, нужно ли боту бросить кости
+            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                const { newState: diceState, error: diceError } = rollDiceForBackgammon(
+                    currentRoom.gameState,
+                    botPlayerId,
+                    currentRoom.players
+                );
+                
+                if (diceError) {
+                    console.log('[Bot] Dice roll error:', diceError);
+                    return;
+                }
+                
+                currentRoom.gameState = diceState;
+                io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+                
+                // Если после броска костей нет доступных ходов, ход уже переключился
+                if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                    return;
+                }
+                
+                // Небольшая задержка перед ходами
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        let botCanMove = true;
+        let safetyBreak = 0;
+
+        while (botCanMove && safetyBreak < 10) {
+            safetyBreak++;
+            
+            const botPlayerIndex = currentRoom.players.findIndex(p => isBot(p)) as 0 | 1;
+            const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
+            
+            if (!botMove || Object.keys(botMove).length === 0) break;
+
+            const botProcessResult = gameLogic.processMove(
+                currentRoom.gameState,
+                botMove,
+                // @ts-ignore
+                nextPlayer.user._id.toString(),
+                currentRoom.players
+            );
+
+            if (botProcessResult.error) {
+                console.log(`[Bot] Move error: ${botProcessResult.error}`);
+                break;
+            }
+
+            currentRoom.gameState = botProcessResult.newState;
+            
+            const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, currentRoom.players);
+            if (botGameResult.isGameOver) {
+                return endGame(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
+            }
+            
+            botCanMove = !('turnShouldSwitch' in botProcessResult ? botProcessResult.turnShouldSwitch : true);
+            
+            // Для нард: если ход переключился, выходим из цикла
+            if (currentRoom.gameType === 'backgammon' &&
+                ('turnShouldSwitch' in botProcessResult ? botProcessResult.turnShouldSwitch : true)) {
+                break;
+            }
+        }
+
+        if (currentRoom) {
+            io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
+        }
+    } catch (error) {
+        console.error(`[Bot] Error in regular game bot move:`, error);
+    }
+}
+
 export const initializeSocket = (io: Server) => {
 
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
@@ -201,10 +296,43 @@ export const initializeSocket = (io: Server) => {
             }
         });
 
+        socket.on('leaveTournamentGame', async (matchId: string) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            console.log(`[Tournament] Player ${userId} leaving tournament game ${matchId}`);
+            
+            // Удаляем игрока из сокет-маппинга турнира
+            if (tournamentPlayerSockets[userId]) {
+                delete tournamentPlayerSockets[userId];
+            }
+            
+            // Покидаем комнату турнира
+            socket.leave(`tournament-${matchId}`);
+        });
+
         socket.on('tournamentMove', async ({ matchId, move }: { matchId: string, move: any }) => {
             // @ts-ignore
             const userId = initialUser._id.toString();
             await processTournamentMove(io, socket, matchId, userId, move);
+        });
+
+        // Tournament exit warning system events
+        socket.on('tournamentPlayerLeft', async ({ matchId, timestamp }: { matchId: string, timestamp: number }) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            await handleTournamentPlayerLeft(io, matchId, userId, timestamp);
+        });
+
+        socket.on('tournamentPlayerReturned', async ({ matchId }: { matchId: string }) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            await handleTournamentPlayerReturned(io, matchId, userId);
+        });
+
+        socket.on('tournamentPlayerForfeited', async ({ matchId, reason }: { matchId: string, reason?: string }) => {
+            // @ts-ignore
+            const userId = initialUser._id.toString();
+            await handleTournamentPlayerForfeited(io, matchId, userId, reason);
         });
 
         socket.on('rollDice', (roomId: string) => {
@@ -337,11 +465,11 @@ export const initializeSocket = (io: Server) => {
 
             const gameLogic = gameLogics[room.gameType];
             
-            const { newState, error, turnShouldSwitch } = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
+            const result = gameLogic.processMove(room.gameState, move, currentPlayerId, room.players);
             
-            if (error) return socket.emit('error', { message: error });
+            if (result.error) return socket.emit('error', { message: result.error });
 
-            room.gameState = newState;
+            room.gameState = result.newState;
             
             const gameResult = gameLogic.checkGameEnd(room.gameState, room.players);
             if (gameResult.isGameOver) {
@@ -349,87 +477,17 @@ export const initializeSocket = (io: Server) => {
             }
             
             io.to(roomId).emit('gameUpdate', getPublicRoomState(room));
+            
+            // Обрабатываем ход бота если нужно
             // @ts-ignore
-            const nextPlayer = room.players.find(p => p.user._id.toString() === room.gameState.turn)!;
-            if (isBot(nextPlayer) && turnShouldSwitch) {
+            const nextPlayer = room.players.find(p => p.user._id.toString() === room.gameState.turn);
+            const shouldScheduleBotMove = nextPlayer && isBot(nextPlayer) &&
+                ('turnShouldSwitch' in result ? result.turnShouldSwitch : true);
+                
+            if (shouldScheduleBotMove) {
                 setTimeout(() => {
-                    (async () => {
-                        let currentRoom = rooms[roomId];
-                        if (!currentRoom) return;
-
-                        // Специальная логика для нард - бот должен бросить кости
-                        if (currentRoom.gameType === 'backgammon') {
-                            // @ts-ignore
-                            const botPlayerId = nextPlayer.user._id.toString();
-                            
-                            // Проверяем, нужно ли боту бросить кости
-                            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
-                                const { newState: diceState, error: diceError } = rollDiceForBackgammon(
-                                    currentRoom.gameState,
-                                    botPlayerId,
-                                    currentRoom.players
-                                );
-                                
-                                if (diceError) {
-                                    console.log('[Bot] Dice roll error:', diceError);
-                                    return;
-                                }
-                                
-                                currentRoom.gameState = diceState;
-                                io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
-                                
-                                // Если после броска костей нет доступных ходов, ход уже переключился
-                                if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
-                                    return;
-                                }
-                                
-                                // Небольшая задержка перед ходами
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                            }
-                        }
-
-                        let botCanMove = true;
-                        let safetyBreak = 0;
-
-                        while (botCanMove && safetyBreak < 10) {
-                            safetyBreak++;
-                            
-                            const botPlayerIndex = currentRoom.players.findIndex(p => isBot(p)) as 0 | 1;
-                            const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
-                            
-                            if (!botMove || Object.keys(botMove).length === 0) break;
-
-                            const botProcessResult = gameLogic.processMove(
-                                currentRoom.gameState,
-                                botMove,
-                                // @ts-ignore
-                                nextPlayer.user._id.toString(),
-                                currentRoom.players
-                            );
-
-                            if (botProcessResult.error) break;
-
-                            currentRoom.gameState = botProcessResult.newState;
-                            
-                            const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, currentRoom.players);
-                            if (botGameResult.isGameOver) {
-                                return endGame(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
-                            }
-                            
-                            botCanMove = !botProcessResult.turnShouldSwitch;
-                            
-                            // Для нард: если ход переключился, выходим из цикла
-                            if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
-                                break;
-                            }
-                        }
-
-                        if (currentRoom) {
-                             io.to(roomId).emit('gameUpdate', getPublicRoomState(currentRoom));
-                        }
-                       
-                    })();
-                }, 1500);
+                    processBotMoveInRegularGame(io, roomId, nextPlayer, gameLogic);
+                }, 1200);
             }
         });
 

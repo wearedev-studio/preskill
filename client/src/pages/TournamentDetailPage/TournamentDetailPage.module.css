@@ -174,6 +174,82 @@
     box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
+.prizeSection {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.prizeSection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #10b981);
+}
+
+.prizeSection h3 {
+    margin: 0 0 1.5rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+    text-align: center;
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.prizeDistribution {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.prizeItem {
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.prizeItem:hover {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+}
+
+.prizePlace {
+    font-weight: 600;
+    color: white;
+    font-size: 1rem;
+}
+
+.prizeAmount {
+    font-weight: 700;
+    color: #10b981;
+    font-size: 1rem;
+}
+
+.prizeItem:last-child .prizePlace {
+    color: #94a3b8;
+}
+
+.prizeItem:last-child .prizeAmount {
+    color: #ef4444;
+}
+
 .actions {
     display: flex;
     gap: 1rem;
@@ -370,106 +446,241 @@
 
 .bracket {
     display: flex;
-    gap: 3rem;
+    gap: 4rem;
     overflow-x: auto;
-    padding: 1rem 0;
-    min-height: 400px;
+    padding: 2rem 1rem;
+    min-height: 500px;
+    position: relative;
+}
+
+.bracket::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(16, 185, 129, 0.05));
+    border-radius: 20px;
+    pointer-events: none;
 }
 
 .round {
-    min-width: 280px;
+    min-width: 320px;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 2rem;
+    position: relative;
+    z-index: 1;
 }
 
 .roundTitle {
-    font-size: 1.25rem;
+    font-size: 1.375rem;
     font-weight: 700;
     color: white;
     text-align: center;
-    padding: 1rem;
+    padding: 1.25rem 1.5rem;
     background: linear-gradient(135deg, #3b82f6, #2563eb);
-    border-radius: 12px;
-    margin-bottom: 1rem;
+    border-radius: 16px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.roundTitle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
 
 .matches {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 2rem;
+    align-items: center;
 }
 
 .match {
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid #475569;
-    border-radius: 16px;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.6));
+    border: 2px solid #475569;
+    border-radius: 20px;
+    padding: 2rem;
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    max-width: 280px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.match::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #6b7280, #4b5563);
+    transition: all 0.4s ease;
 }
 
 .match:hover {
     border-color: #3b82f6;
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 12px 32px rgba(59, 130, 246, 0.3);
+    transform: translateY(-4px);
+}
+
+.match:hover::before {
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+}
+
+.match.finished::before {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.match.active::before {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
+    animation: pulse 2s infinite;
 }
 
 .matchPlayers {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .player {
-    background: rgba(71, 85, 105, 0.3);
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    border: 1px solid transparent;
+    background: rgba(71, 85, 105, 0.4);
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.player::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #6b7280;
     transition: all 0.3s ease;
 }
 
 .player.winner {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(5, 150, 105, 0.2));
     border-color: #10b981;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+    transform: scale(1.02);
+}
+
+.player.winner::before {
+    background: linear-gradient(180deg, #10b981, #059669);
+    width: 6px;
+}
+
+.player.winner .playerName {
+    color: #10b981;
+    font-weight: 700;
 }
 
 .playerName {
     font-weight: 600;
     color: white;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .vs {
     text-align: center;
     color: #94a3b8;
     font-weight: 700;
-    font-size: 0.875rem;
-    margin: 0.25rem 0;
+    font-size: 1rem;
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 8px;
+    letter-spacing: 1px;
 }
 
 .matchStatus {
     text-align: center;
-    padding: 0.5rem;
-    border-radius: 8px;
-    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    font-weight: 700;
     font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .matchWinner {
     background: linear-gradient(135deg, #10b981, #059669);
     color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .matchActive {
     background: linear-gradient(135deg, #f59e0b, #d97706);
     color: white;
     animation: pulse 2s infinite;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .matchPending {
     background: rgba(107, 114, 128, 0.3);
     color: #94a3b8;
+    border: 1px solid #6b7280;
+}
+
+/* Соединительные линии между раундами */
+.round:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: -2rem;
+    top: 50%;
+    width: 4rem;
+    height: 2px;
+    background: linear-gradient(90deg, #475569, #6b7280);
+    transform: translateY(-50%);
+    z-index: 0;
+}
+
+/* Анимация для активных матчей */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+}
+
+/* Специальные стили для финала */
+.round:last-child .roundTitle {
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.4);
+}
+
+.round:last-child .match {
+    border-color: #f59e0b;
+    box-shadow: 0 12px 32px rgba(245, 158, 11, 0.2);
+}
+
+.round:last-child .match::before {
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
 
 .loading {

@@ -149,7 +149,7 @@ export const backgammonLogic: IGameLogic = {
         }
 
         console.log('[Backgammon] Move processed successfully. Turn should switch:', turnShouldSwitch);
-        return { newState: newGameState, turnShouldSwitch };
+        return { newState: newGameState, error: undefined, turnShouldSwitch };
     },
 
     checkGameEnd(gameState: BackgammonState, players: Room['players']) {

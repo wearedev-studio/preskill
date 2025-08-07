@@ -3,19 +3,30 @@ import { Server } from 'socket.io';
 import Tournament from '../models/Tournament.model';
 import User from '../models/User.model';
 import { 
-    createTournament, 
-    registerPlayerInTournament, 
-    getActiveTournaments, 
-    getTournamentById 
+    createTournament,
+    registerPlayerInTournament,
+    getActiveTournaments,
+    getAllTournaments,
+    getTournamentById
 } from '../services/tournament.service';
 
-export const getAllTournaments = async (req: Request, res: Response) => {
+export const getActiveTournamentsController = async (req: Request, res: Response) => {
     try {
         const tournaments = await getActiveTournaments();
         res.json(tournaments);
     } catch (error) {
         console.error('Error fetching tournaments:', error);
         res.status(500).json({ message: 'Ошибка при получении списка турниров' });
+    }
+};
+
+export const getAllTournamentsController = async (req: Request, res: Response) => {
+    try {
+        const tournaments = await getAllTournaments();
+        res.json(tournaments);
+    } catch (error) {
+        console.error('Error fetching all tournaments:', error);
+        res.status(500).json({ message: 'Ошибка при получении списка всех турниров' });
     }
 };
 

@@ -6,7 +6,7 @@ import { useSocket } from '../../context/SocketContext';
 import styles from './TournamentDetailPage.module.css';
 
 const TournamentDetailPage: React.FC = () => {
-    const { tournamentId } = useParams<{ tournamentId: string }>();
+    const { id: tournamentId } = useParams<{ id: string }>();
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -139,12 +139,19 @@ const TournamentDetailPage: React.FC = () => {
                         </h4>
                         <div className={styles.matches}>
                             {round.matches.map((match, matchIndex) => (
-                                <div key={matchIndex} className={styles.match}>
+                                <div
+                                    key={matchIndex}
+                                    className={`${styles.match} ${
+                                        match.status === 'FINISHED' ? styles.finished :
+                                        match.status === 'ACTIVE' ? styles.active : ''
+                                    }`}
+                                >
                                     <div className={styles.matchPlayers}>
                                         <div className={`${styles.player} ${match.winner?._id === match.player1._id ? styles.winner : ''}`}>
                                             <span className={styles.playerName}>
                                                 {match.player1.username}
                                                 {match.player1.isBot && ' 🤖'}
+                                                {match.winner?._id === match.player1._id && ' 👑'}
                                             </span>
                                         </div>
                                         <div className={styles.vs}>VS</div>
@@ -152,20 +159,30 @@ const TournamentDetailPage: React.FC = () => {
                                             <span className={styles.playerName}>
                                                 {match.player2.username}
                                                 {match.player2.isBot && ' 🤖'}
+                                                {match.winner?._id === match.player2._id && ' 👑'}
                                             </span>
                                         </div>
                                     </div>
                                     <div className={styles.matchStatus}>
                                         {match.status === 'FINISHED' && match.winner && (
                                             <span className={styles.matchWinner}>
-                                                Победитель: {match.winner.username}
+                                                🏆 {match.winner.username} побеждает!
                                             </span>
                                         )}
                                         {match.status === 'ACTIVE' && (
-                                            <span className={styles.matchActive}>Идет игра</span>
+                                            <span className={styles.matchActive}>
+                                                🔥 Матч в процессе
+                                            </span>
                                         )}
                                         {match.status === 'PENDING' && (
-                                            <span className={styles.matchPending}>Ожидание</span>
+                                            <span className={styles.matchPending}>
+                                                ⏳ Ожидание начала
+                                            </span>
+                                        )}
+                                        {match.status === 'WAITING' && (
+                                            <span className={styles.matchPending}>
+                                                ⏸️ Ожидание игроков
+                                            </span>
                                         )}
                                     </div>
                                 </div>
@@ -325,6 +342,39 @@ const TournamentDetailPage: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Призовой фонд и распределение */}
+            {tournament.prizePool > 0 && (
+                <div className={styles.prizeSection}>
+                    <h3>💰 Призовой фонд: {tournament.prizePool} монет</h3>
+                    <div className={styles.prizeDistribution}>
+                        <div className={styles.prizeItem}>
+                            <span className={styles.prizePlace}>🥇 1 место</span>
+                            <span className={styles.prizeAmount}>
+                                {Math.floor(tournament.prizePool * 0.6)} монет (60%)
+                            </span>
+                        </div>
+                        <div className={styles.prizeItem}>
+                            <span className={styles.prizePlace}>🥈 2 место</span>
+                            <span className={styles.prizeAmount}>
+                                {Math.floor(tournament.prizePool * 0.3)} монет (30%)
+                            </span>
+                        </div>
+                        <div className={styles.prizeItem}>
+                            <span className={styles.prizePlace}>🥉 3-4 место</span>
+                            <span className={styles.prizeAmount}>
+                                {Math.floor(tournament.prizePool * 0.05)} монет (5% каждому)
+                            </span>
+                        </div>
+                        <div className={styles.prizeItem}>
+                            <span className={styles.prizePlace}>💼 Комиссия платформы</span>
+                            <span className={styles.prizeAmount}>
+                                {Math.floor(tournament.prizePool * (tournament.platformCommission / 100))} монет ({tournament.platformCommission}%)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className={styles.actions}>
                 {tournament.status === 'WAITING' && (

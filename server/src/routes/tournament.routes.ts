@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { 
-    getAllTournaments, 
-    getTournament, 
+import {
+    getActiveTournamentsController,
+    getAllTournamentsController,
+    getTournament,
     createNewTournament,
     registerInTournament,
     unregisterFromTournament,
@@ -13,7 +14,8 @@ import { protect } from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.route('/').get(getAllTournaments);
+router.route('/').get(getActiveTournamentsController);
+router.route('/all').get(getAllTournamentsController);
 router.route('/history').get(getTournamentHistory);
 router.route('/stats').get(getTournamentStats);
 router.route('/:tournamentId').get(getTournament);

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import { NotificationHandler } from './components/NotificationHandler/NotificationHandler';
+import TournamentExitManager from './components/tournament/TournamentExitManager';
 
 // Шаблоны
 import MainLayout from './components/layout/MainLayout';
@@ -26,22 +27,24 @@ function App() {
 
   return (
     <Router>
-        <Toaster position="bottom-right" />
-        {isAuthenticated && <NotificationHandler />}
-        
-        <Routes>
-            {isAuthenticated ? (
-                 <Route path="/*" element={<MainLayout />} />
-            ) : (
-                <>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/register" element={<RegisterPage />} />
-                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                    <Route path="/reset-password" element={<ResetPasswordPage />} />
-                    <Route path="*" element={<Navigate to="/login" replace />} />
-                </>
-            )}
-        </Routes>
+        <TournamentExitManager>
+            <Toaster position="bottom-right" />
+            {isAuthenticated && <NotificationHandler />}
+            
+            <Routes>
+                {isAuthenticated ? (
+                     <Route path="/*" element={<MainLayout />} />
+                ) : (
+                    <>
+                        <Route path="/login" element={<LoginPage />} />
+                        <Route path="/register" element={<RegisterPage />} />
+                        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                        <Route path="/reset-password" element={<ResetPasswordPage />} />
+                        <Route path="*" element={<Navigate to="/login" replace />} />
+                    </>
+                )}
+            </Routes>
+        </TournamentExitManager>
     </Router>
   );
 }

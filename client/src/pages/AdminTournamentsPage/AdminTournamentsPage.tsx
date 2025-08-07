@@ -68,7 +68,7 @@ const AdminTournamentsPage: React.FC = () => {
     const loadTournaments = async () => {
         try {
             setLoading(true);
-            const data = await tournamentService.getActiveTournaments();
+            const data = await tournamentService.getAllTournaments();
             setTournaments(data);
             setError(null);
         } catch (err: any) {

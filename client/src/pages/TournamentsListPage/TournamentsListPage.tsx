@@ -9,7 +9,7 @@ const TournamentsListPage: React.FC = () => {
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [filter, setFilter] = useState<'all' | 'waiting' | 'active' | 'finished'>('all');
+    const [filter, setFilter] = useState<'all' | 'waiting' | 'active' | 'finished' | 'cancelled'>('all');
     const [gameTypeFilter, setGameTypeFilter] = useState<'all' | 'tic-tac-toe' | 'checkers' | 'chess' | 'backgammon'>('all');
     
     const { user } = useAuth();
@@ -53,7 +53,7 @@ const TournamentsListPage: React.FC = () => {
     const loadTournaments = async () => {
         try {
             setLoading(true);
-            const data = await tournamentService.getActiveTournaments();
+            const data = await tournamentService.getAllTournaments();
             setTournaments(data);
             setError(null);
         } catch (err: any) {
@@ -172,6 +172,7 @@ const TournamentsListPage: React.FC = () => {
                         <option value="waiting">Ожидание</option>
                         <option value="active">Активные</option>
                         <option value="finished">Завершенные</option>
+                        <option value="cancelled">Отмененные</option>
                     </select>
                 </div>
 

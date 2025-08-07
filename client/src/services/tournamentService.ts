@@ -111,6 +111,20 @@ class TournamentService {
     }
 
     /**
+     * Получить все турниры (включая завершенные)
+     */
+    async getAllTournaments(): Promise<Tournament[]> {
+        try {
+            this.updateToken();
+            const response = await axios.get(`${API_BASE_URL}/api/tournaments/all`, this.getAuthHeaders());
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching all tournaments:', error);
+            throw new Error('Ошибка при получении списка всех турниров');
+        }
+    }
+
+    /**
      * Получить турнир по ID
      */
     async getTournamentById(tournamentId: string): Promise<Tournament> {
