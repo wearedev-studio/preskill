@@ -10,35 +10,6 @@ import { advanceTournamentWinner } from './tournament.service';
 export const tournamentRooms: Record<string, ITournamentRoom> = {};
 export const tournamentPlayerSockets: Record<string, string> = {};
 
-// Упрощенная структура игрока для игровой логики
-interface GamePlayer {
-    socketId: string;
-    user: {
-        _id: string;
-        username: string;
-        avatar: string;
-        balance: number;
-    };
-}
-
-/**
- * Преобразует игроков турнира в формат, понятный игровой логике
- */
-function convertPlayersForGameLogic(players: ITournamentRoomPlayer[]): GamePlayer[] {
-    return players.map(p => ({
-        socketId: p.socketId || 'offline',
-        user: {
-            _id: p._id.toString(),
-            username: p.username,
-            avatar: p.isBot ? 'bot_avatar.png' : 'default_avatar.png',
-            balance: p.isBot ? 9999 : 0
-        }
-    }));
-}
-
-/**
- * Создает турнирную комнату
- */
 export async function createTournamentRoom(
     io: Server,
     tournamentId: string,
@@ -56,19 +27,29 @@ export async function createTournamentRoom(
             return null;
         }
 
-        // Преобразуем игроков для игровой логики
-        const gamePlayersFormat = convertPlayersForGameLogic(players);
-        console.log(`[TournamentRoom] Game players format:`, gamePlayersFormat.map(p => ({ 
-            id: p.user._id, 
-            username: p.user.username 
-        })));
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Приводим структуру игроков к формату, ожидаемому игровой логикой
+        const roomPlayers = players.map(p => ({
+            socketId: p.socketId || 'offline',
+            user: {
+                _id: p._id.toString(), // Убеждаемся, что это строка
+                username: p.username,
+                avatar: p.isBot ? 'bot_avatar.png' : 'default_avatar.png',
+                balance: p.isBot ? 9999 : 0
+            }
+        }));
 
-        // Создаем начальное состояние игры
-        const initialGameState = gameLogic.createInitialState(gamePlayersFormat);
-        console.log(`[TournamentRoom] Initial game state:`, {
+        console.log(`[TournamentRoom] Creating initial state for ${gameType}:`, {
+            players: roomPlayers.map(p => ({ id: p.user._id, username: p.user.username })),
+            gameType
+        });
+
+        const initialGameState = gameLogic.createInitialState(roomPlayers);
+        
+        console.log(`[TournamentRoom] Initial game state created:`, {
             turn: initialGameState.turn,
-            gameType,
-            hasBoard: !!initialGameState.board
+            turnType: typeof initialGameState.turn,
+            hasBoard: !!initialGameState.board,
+            gameType
         });
 
         // Создаем запись в базе данных
@@ -141,9 +122,6 @@ async function notifyPlayersAboutMatch(io: Server, room: ITournamentRoom) {
     }
 }
 
-/**
- * Подключение игрока к турнирной комнате
- */
 export async function joinTournamentRoom(
     io: Server,
     socket: any,
@@ -160,7 +138,7 @@ export async function joinTournamentRoom(
             return false;
         }
 
-        // Проверяем статус комнаты
+        // Проверяем статус комнаты - если матч уже завершен, не позволяем подключиться
         if (room.status === 'FINISHED') {
             console.log(`[TournamentRoom] Match ${matchId} is already finished`);
             socket.emit('error', { message: 'Этот матч уже завершен' });
@@ -168,10 +146,34 @@ export async function joinTournamentRoom(
         }
 
         // Проверяем, что игрок участвует в этом матче
-        const player = room.players.find(p => p._id.toString() === playerId.toString());
+        const player = room.players.find(p => p._id === playerId);
         if (!player) {
             console.log(`[TournamentRoom] Player ${playerId} not in match ${matchId}`);
             socket.emit('error', { message: 'Вы не участвуете в этом матче' });
+            return false;
+        }
+
+        // Проверяем статус турнира
+        const Tournament = (await import('../models/Tournament.model')).default;
+        const tournament = await Tournament.findById(room.tournamentId);
+        if (!tournament) {
+            console.log(`[TournamentRoom] Tournament not found for match ${matchId}`);
+            socket.emit('error', { message: 'Турнир не найден' });
+            return false;
+        }
+
+        // Если турнир завершен, не позволяем подключиться
+        if (tournament.status === 'FINISHED') {
+            console.log(`[TournamentRoom] Tournament ${tournament._id} is finished`);
+            socket.emit('error', { message: 'Этот турнир уже завершен' });
+            return false;
+        }
+
+        // Проверяем, не исключен ли игрок из турнира
+        const playerInTournament = tournament.players.find(p => p._id.toString() === playerId);
+        if (!playerInTournament) {
+            console.log(`[TournamentRoom] Player ${playerId} not in tournament`);
+            socket.emit('error', { message: 'Вы не участвуете в этом турнире' });
             return false;
         }
 
@@ -180,17 +182,7 @@ export async function joinTournamentRoom(
         tournamentPlayerSockets[playerId] = socket.id;
 
         // Подключаем к комнате
-        const roomName = `tournament-${matchId}`;
-        socket.join(roomName);
-        
-        console.log(`[TournamentRoom] Player ${playerId} joined room ${roomName}`);
-        console.log(`[TournamentRoom] Socket ${socket.id} joined room ${roomName}`);
-        
-        // Проверяем, что сокет действительно в комнате
-        setTimeout(() => {
-            const socketsInRoom = socket.adapter.rooms.get(roomName);
-            console.log(`[TournamentRoom] Sockets in room ${roomName} after join:`, socketsInRoom ? Array.from(socketsInRoom) : 'none');
-        }, 100);
+        socket.join(`tournament-${matchId}`);
 
         // Обновляем статус комнаты
         if (room.status === 'WAITING') {
@@ -201,8 +193,17 @@ export async function joinTournamentRoom(
             await TournamentRoom.findOneAndUpdate({ matchId }, { status: 'ACTIVE' });
         }
 
-        // Отправляем состояние игры
-        console.log(`[TournamentRoom] Sending game start to player ${playerId}`);
+        // ВСЕГДА отправляем состояние игры
+        console.log(`[TournamentRoom] Sending game start to player ${playerId}:`, {
+            matchId,
+            gameType: room.gameType,
+            players: room.players.map(p => ({ id: p._id, username: p.username, isBot: p.isBot })),
+            gameStateTurn: room.gameState.turn,
+            myPlayerId: playerId,
+            playerIdType: typeof playerId,
+            gameStateTurnType: typeof room.gameState.turn
+        });
+        
         socket.emit('tournamentGameStart', {
             matchId,
             gameType: room.gameType,
@@ -213,18 +214,24 @@ export async function joinTournamentRoom(
 
         console.log(`[TournamentRoom] Player ${playerId} joined room ${matchId} successfully`);
 
-        // Проверяем, нужно ли боту сделать первый ход
-        const currentPlayer = room.players.find(p => p._id.toString() === room.gameState.turn?.toString());
+        // Проверяем, нужно ли боту сделать первый ход (только если игра только началась)
+        const currentPlayer = room.players.find(p => p._id === room.gameState.turn);
         if (currentPlayer && currentPlayer.isBot) {
-            console.log(`[TournamentRoom] Bot ${currentPlayer.username} should make first move`);
+            console.log(`[TournamentRoom] Bot ${currentPlayer.username} should make a move`);
             
-            setTimeout(async () => {
-                try {
-                    await processTournamentMove(io, null, room.matchId, currentPlayer._id.toString(), { type: 'BOT_MOVE' });
-                } catch (error) {
-                    console.error(`[TournamentRoom] Error in initial bot move:`, error);
-                }
-            }, 1000);
+            // Проверяем, что это действительно начало игры (нет предыдущих ходов)
+            const isGameStart = !room.gameState.moveHistory || room.gameState.moveHistory.length === 0;
+            
+            if (isGameStart) {
+                setTimeout(async () => {
+                    try {
+                        // Используем ту же логику, что и в processTournamentMove
+                        await processTournamentMove(io, null, room.matchId, currentPlayer._id, { type: 'BOT_MOVE' });
+                    } catch (error) {
+                        console.error(`[TournamentRoom] Error in initial bot move:`, error);
+                    }
+                }, 2000); // Задержка для инициализации
+            }
         }
 
         return true;
@@ -235,9 +242,6 @@ export async function joinTournamentRoom(
     }
 }
 
-/**
- * Обработка хода в турнире
- */
 export async function processTournamentMove(
     io: Server,
     socket: any,
@@ -247,7 +251,7 @@ export async function processTournamentMove(
 ): Promise<void> {
     try {
         console.log(`[TournamentRoom] Processing move for player ${playerId} in match ${matchId}`);
-        console.log(`[TournamentRoom] Move:`, move);
+        console.log(`[TournamentRoom] Move data:`, JSON.stringify(move, null, 2));
 
         const room = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
         if (!room || room.status !== 'ACTIVE') {
@@ -258,18 +262,30 @@ export async function processTournamentMove(
 
         const player = room.players.find(p => p._id.toString() === playerId.toString());
         if (!player) {
-            console.log(`[TournamentRoom] Player not found in room`);
+            console.log(`[TournamentRoom] Player not found in room. Available players:`, room.players.map(p => ({ id: p._id, username: p.username })));
             if (socket) socket.emit('tournamentGameError', { matchId, error: 'Игрок не найден в матче' });
             return;
         }
 
         const isBot = player.isBot;
-        console.log(`[TournamentRoom] Player ${player.username} is bot: ${isBot}, current turn: ${room.gameState.turn}`);
+        console.log(`[TournamentRoom] Player ${player.username} is bot: ${isBot}`);
+        console.log(`[TournamentRoom] Current game state turn: ${room.gameState.turn}`);
+        console.log(`[TournamentRoom] Player ID: ${playerId}`);
         
-        // Проверяем очередность хода (только для людей)
+        // Более мягкая проверка очередности хода
         if (!isBot && room.gameState.turn) {
             const currentTurn = room.gameState.turn.toString();
             const playerIdStr = playerId.toString();
+            
+            console.log(`[TournamentRoom] Turn validation:`, {
+                currentTurn,
+                playerIdStr,
+                isEqual: currentTurn === playerIdStr,
+                currentTurnType: typeof currentTurn,
+                playerIdType: typeof playerIdStr,
+                gameStateTurn: room.gameState.turn,
+                playerId: playerId
+            });
             
             if (currentTurn !== playerIdStr) {
                 console.log(`[TournamentRoom] Turn check failed: expected ${currentTurn}, got ${playerIdStr}`);
@@ -285,14 +301,24 @@ export async function processTournamentMove(
             return;
         }
 
-        // Преобразуем игроков для игровой логики
-        const gamePlayersFormat = convertPlayersForGameLogic(room.players);
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Приводим структуру игроков к формату, ожидаемому игровой логикой
+        const roomPlayers = room.players.map(p => ({
+            socketId: p.socketId || 'offline',
+            user: {
+                _id: p._id.toString(), // Убеждаемся, что это строка
+                username: p.username,
+                avatar: p.isBot ? 'bot_avatar.png' : 'default_avatar.png',
+                balance: p.isBot ? 9999 : 0
+            }
+        }));
+
+        console.log(`[TournamentRoom] Room players:`, roomPlayers.map(p => ({ id: p.user._id, username: p.user.username })));
 
         let result;
 
         if (isBot && move.type === 'BOT_MOVE') {
             console.log(`[TournamentRoom] Processing bot move`);
-            const botPlayerIndex = room.players.findIndex(p => p._id.toString() === playerId.toString()) as 0 | 1;
+            const botPlayerIndex = room.players.findIndex(p => p._id === playerId) as 0 | 1;
             const botMove = gameLogic.makeBotMove(room.gameState, botPlayerIndex);
             
             if (!botMove || Object.keys(botMove).length === 0) {
@@ -300,22 +326,30 @@ export async function processTournamentMove(
                 return;
             }
             
-            console.log(`[TournamentRoom] Bot move:`, botMove);
-            result = gameLogic.processMove(room.gameState, botMove, playerId, gamePlayersFormat);
+            console.log(`[TournamentRoom] Bot move:`, JSON.stringify(botMove, null, 2));
+            result = gameLogic.processMove(room.gameState, botMove, playerId, roomPlayers);
         }
         else if (room.gameType === 'backgammon' && move.type === 'ROLL_DICE') {
             console.log(`[TournamentRoom] Processing dice roll`);
             const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
-            result = rollDiceForBackgammon(room.gameState, playerId, gamePlayersFormat);
+            result = rollDiceForBackgammon(room.gameState, playerId, roomPlayers);
         } else {
             console.log(`[TournamentRoom] Processing regular move`);
-            result = gameLogic.processMove(room.gameState, move, playerId, gamePlayersFormat);
+            console.log(`[TournamentRoom] Move details:`, {
+                move: JSON.stringify(move),
+                playerId,
+                gameType: room.gameType,
+                roomPlayersCount: roomPlayers.length,
+                roomPlayers: roomPlayers.map(p => ({ id: p.user._id, username: p.user.username }))
+            });
+            result = gameLogic.processMove(room.gameState, move, playerId, roomPlayers);
         }
 
         console.log(`[TournamentRoom] Game logic result:`, {
             hasError: !!result.error,
             error: result.error,
-            hasNewState: !!result.newState
+            hasNewState: !!result.newState,
+            turnShouldSwitch: 'turnShouldSwitch' in result ? result.turnShouldSwitch : 'not specified'
         });
 
         if (result.error) {
@@ -342,53 +376,34 @@ export async function processTournamentMove(
             console.error(`[TournamentRoom] Database update error:`, dbError);
         }
 
-        // Отправляем обновление всем игрокам в комнате
-        const roomName = `tournament-${matchId}`;
-        console.log(`[TournamentRoom] Sending game update to room: ${roomName}`);
-        
-        // Получаем список сокетов в комнате для отладки
-        const socketsInRoom = io.sockets.adapter.rooms.get(roomName);
-        console.log(`[TournamentRoom] Sockets in room ${roomName}:`, socketsInRoom ? Array.from(socketsInRoom) : 'none');
-        
-        io.to(roomName).emit('tournamentGameUpdate', {
+        // Отправляем обновление всем игрокам
+        io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
             matchId,
             gameState: result.newState
         });
 
-        // Дополнительно отправляем обновления напрямую игрокам по их socketId
-        for (const player of room.players) {
-            if (!player.isBot && player.socketId) {
-                const socket = io.sockets.sockets.get(player.socketId);
-                if (socket) {
-                    console.log(`[TournamentRoom] Sending direct update to player ${player.username} (${player.socketId})`);
-                    socket.emit('tournamentGameUpdate', {
-                        matchId,
-                        gameState: result.newState
-                    });
-                } else {
-                    console.log(`[TournamentRoom] Socket not found for player ${player.username} (${player.socketId})`);
-                }
-            }
-        }
-
         console.log(`[TournamentRoom] Game state updated and sent to clients`);
 
         // Проверяем окончание игры
-        const gameResult = gameLogic.checkGameEnd(result.newState, gamePlayersFormat);
+        const gameResult = gameLogic.checkGameEnd(result.newState, roomPlayers);
         
         if (gameResult.isGameOver) {
-            console.log(`[TournamentRoom] Game over detected for match ${matchId}`);
+            console.log(`[TournamentRoom] Game over detected for match ${matchId}, winner: ${gameResult.winnerId}, isDraw: ${gameResult.isDraw}`);
             await finishTournamentMatch(io, room, gameResult.winnerId, gameResult.isDraw);
             return;
         }
 
         // Обрабатываем ход бота если нужно
-        const nextPlayer = room.players.find(p => p._id.toString() === result.newState.turn?.toString());
-        if (nextPlayer && nextPlayer.isBot) {
+        const nextPlayer = room.players.find(p => p._id === result.newState.turn);
+        const shouldScheduleBotMove = nextPlayer && nextPlayer.isBot &&
+            ('turnShouldSwitch' in result ? result.turnShouldSwitch : true);
+            
+        if (shouldScheduleBotMove) {
             console.log(`[TournamentRoom] Scheduling bot move for ${nextPlayer.username}`);
             
+            // Используем более короткую задержку для ботов
             setTimeout(async () => {
-                await processTournamentMove(io, null, matchId, nextPlayer._id.toString(), { type: 'BOT_MOVE' });
+                await processBotMove(io, matchId, nextPlayer._id, gameLogic, roomPlayers);
             }, 800);
         }
 
@@ -396,6 +411,119 @@ export async function processTournamentMove(
     } catch (error) {
         console.error(`[TournamentRoom] Error processing move:`, error);
         if (socket) socket.emit('tournamentGameError', { matchId, error: 'Ошибка обработки хода' });
+    }
+}
+
+// Отдельная функция для обработки ходов ботов
+async function processBotMove(
+    io: Server,
+    matchId: string,
+    botPlayerId: string,
+    gameLogic: any,
+    roomPlayers: any[]
+): Promise<void> {
+    try {
+        const currentRoom = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
+        if (!currentRoom || currentRoom.status !== 'ACTIVE') return;
+
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Приводим структуру игроков к правильному формату
+        const formattedRoomPlayers = currentRoom.players.map(p => ({
+            socketId: p.socketId || 'offline',
+            user: {
+                _id: p._id.toString(),
+                username: p.username,
+                avatar: p.isBot ? 'bot_avatar.png' : 'default_avatar.png',
+                balance: p.isBot ? 9999 : 0
+            }
+        }));
+
+        // Специальная обработка для нард
+        if (currentRoom.gameType === 'backgammon') {
+            if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
+                const { newState: diceState, error: diceError } = rollDiceForBackgammon(
+                    currentRoom.gameState,
+                    botPlayerId,
+                    formattedRoomPlayers
+                );
+                
+                if (diceError) {
+                    console.log('[TournamentBot] Dice roll error:', diceError);
+                    return;
+                }
+                
+                currentRoom.gameState = diceState;
+                if (tournamentRooms[matchId]) {
+                    tournamentRooms[matchId] = currentRoom;
+                }
+                await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: diceState });
+                
+                io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
+                    matchId,
+                    gameState: diceState
+                });
+                
+                if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
+                    return;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Выполняем ходы бота
+        let botCanMove = true;
+        let safetyBreak = 0;
+
+        while (botCanMove && safetyBreak < 10) {
+            safetyBreak++;
+            
+            const botPlayerIndex = currentRoom.players.findIndex(p => p._id === botPlayerId) as 0 | 1;
+            const botMove = gameLogic.makeBotMove(currentRoom.gameState, botPlayerIndex);
+            
+            if (!botMove || Object.keys(botMove).length === 0) break;
+
+            const botProcessResult = gameLogic.processMove(
+                currentRoom.gameState,
+                botMove,
+                botPlayerId,
+                formattedRoomPlayers
+            );
+
+            if (botProcessResult.error) {
+                console.log(`[TournamentBot] Bot move error: ${botProcessResult.error}`);
+                break;
+            }
+
+            currentRoom.gameState = botProcessResult.newState;
+            if (tournamentRooms[matchId]) {
+                tournamentRooms[matchId] = currentRoom;
+            }
+            await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: botProcessResult.newState });
+            
+            // Проверяем окончание игры после хода бота
+            const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, formattedRoomPlayers);
+            if (botGameResult.isGameOver) {
+                await finishTournamentMatch(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
+                return;
+            }
+            
+            botCanMove = !botProcessResult.turnShouldSwitch;
+            
+            // Для нард: если ход переключился, выходим из цикла
+            if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
+                break;
+            }
+        }
+
+        // Отправляем финальное обновление
+        io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
+            matchId,
+            gameState: currentRoom.gameState
+        });
+
+    } catch (error) {
+        console.error(`[TournamentRoom] Error in bot move processing:`, error);
     }
 }
 
@@ -410,7 +538,7 @@ async function finishTournamentMatch(
 
         let winner: ITournamentRoomPlayer | undefined;
         if (winnerId && !isDraw) {
-            winner = room.players.find(p => p._id.toString() === winnerId.toString());
+            winner = room.players.find(p => p._id === winnerId);
         }
 
         // Обновляем статус комнаты
@@ -437,25 +565,22 @@ async function finishTournamentMatch(
 
         // Продвигаем победителя в турнире
         if (winner) {
-            await advanceTournamentWinner(io, room.tournamentId.toString(), room.matchId, winner);
+            await advanceWinnerInTournament(io, room.tournamentId.toString(), room.matchId, winner);
         } else if (isDraw) {
             // В случае ничьи выбираем случайного победителя
             const randomWinner = room.players[Math.floor(Math.random() * room.players.length)];
-            await advanceTournamentWinner(io, room.tournamentId.toString(), room.matchId, randomWinner);
+            await advanceWinnerInTournament(io, room.tournamentId.toString(), room.matchId, randomWinner);
         }
 
-        // КРИТИЧЕСКИ ВАЖНО: Проверяем, нужно ли создать следующий раунд
-        setTimeout(async () => {
-            try {
-                const updatedTournament = await Tournament.findById(room.tournamentId);
-                if (updatedTournament) {
-                    console.log(`[TournamentRoom] Checking next round after match ${room.matchId} finished`);
-                    await checkAndCreateNextRound(io, updatedTournament);
+        // Очищаем комнату из памяти через некоторое время
+        setTimeout(() => {
+            delete tournamentRooms[room.matchId];
+            room.players.forEach(p => {
+                if (tournamentPlayerSockets[p._id]) {
+                    delete tournamentPlayerSockets[p._id];
                 }
-            } catch (error) {
-                console.error(`[TournamentRoom] Error checking next round after match finish:`, error);
-            }
-        }, 1000);
+            });
+        }, 30000); // 30 секунд
 
         console.log(`[TournamentRoom] Match ${room.matchId} finished`);
     } catch (error) {
@@ -477,10 +602,11 @@ async function notifyPlayersAboutMatchResult(
             if (!player.isBot && player.socketId) {
                 const socket = io.sockets.sockets.get(player.socketId);
                 if (socket) {
-                    const isWinner = winner && player._id.toString() === winner._id.toString();
+                    const isWinner = winner && player._id === winner._id;
                     const isLoser = !isDraw && !isWinner;
 
                     if (isWinner) {
+                        // Игрок победил - уведомляем о переходе в следующий раунд
                         socket.emit('tournamentMatchResult', {
                             type: 'ADVANCED',
                             message: 'Поздравляем! Вы прошли в следующий раунд!',
@@ -494,6 +620,7 @@ async function notifyPlayersAboutMatchResult(
                             link: `/tournament/${tournament._id}`
                         });
                     } else if (isLoser) {
+                        // Игрок проиграл - уведомляем об исключении
                         socket.emit('tournamentMatchResult', {
                             type: 'ELIMINATED',
                             message: 'Вы выбыли из турнира',
@@ -507,6 +634,7 @@ async function notifyPlayersAboutMatchResult(
                             link: `/tournament/${tournament._id}`
                         });
                     } else {
+                        // Ничья
                         socket.emit('tournamentMatchResult', {
                             type: 'DRAW',
                             message: 'Ничья! Определяется случайный победитель...',
@@ -522,44 +650,73 @@ async function notifyPlayersAboutMatchResult(
     }
 }
 
-/**
- * Очищает неактивные турнирные комнаты
- */
-export function cleanupInactiveTournamentRooms(): void {
-    const now = Date.now();
-    const CLEANUP_TIMEOUT = 60 * 60 * 1000; // 1 час
-
-    Object.keys(tournamentRooms).forEach(matchId => {
-        const room = tournamentRooms[matchId];
-        if (room.status === 'FINISHED' && 
-            (now - new Date(room.updatedAt).getTime()) > CLEANUP_TIMEOUT) {
-            delete tournamentRooms[matchId];
-            console.log(`[TournamentRoom] Cleaned up inactive room ${matchId}`);
+async function advanceWinnerInTournament(
+    io: Server,
+    tournamentId: string,
+    matchId: string,
+    winner: ITournamentRoomPlayer
+): Promise<void> {
+    try {
+        const tournament = await Tournament.findById(tournamentId);
+        if (!tournament || tournament.status !== 'ACTIVE') {
+            console.log(`[TournamentRoom] Tournament ${tournamentId} not found or not active`);
+            return;
         }
-    });
+
+        // Находим матч в турнирной сетке и записываем победителя
+        let matchFound = false;
+        for (const round of tournament.bracket) {
+            const match = round.matches.find(m => m.matchId.toString() === matchId);
+            if (match && !match.winner) {
+                match.winner = {
+                    _id: winner._id,
+                    username: winner.username,
+                    isBot: winner.isBot,
+                    socketId: winner.socketId,
+                    registeredAt: new Date()
+                };
+                match.status = 'FINISHED';
+                matchFound = true;
+                break;
+            }
+        }
+
+        if (!matchFound) {
+            console.log(`[TournamentRoom] Match ${matchId} not found in tournament bracket`);
+            return;
+        }
+
+        await tournament.save();
+        io.emit('tournamentUpdated', tournament);
+
+        console.log(`[TournamentRoom] Advanced winner ${winner.username} in tournament ${tournamentId}`);
+
+        // Проверяем, нужно ли создать следующий раунд
+        await checkAndCreateNextRound(io, tournament);
+    } catch (error) {
+        console.error(`[TournamentRoom] Error advancing winner:`, error);
+    }
 }
 
-/**
- * Проверяет и создает следующий раунд турнира
- */
 export async function checkAndCreateNextRound(io: Server, tournament: ITournament): Promise<void> {
     try {
         console.log(`[TournamentRoom] Checking next round for tournament ${tournament._id}`);
+        console.log(`[TournamentRoom] Tournament bracket:`, JSON.stringify(tournament.bracket, null, 2));
         
         // Проверяем все раунды по порядку
         for (let i = 0; i < tournament.bracket.length; i++) {
             const round = tournament.bracket[i];
             console.log(`[TournamentRoom] Checking round ${i}:`, round.matches.map(m => ({ status: m.status, winner: m.winner?.username })));
             
-            const allMatchesFinished = round.matches.every((m: any) => m.status === 'FINISHED');
-            const hasWaitingMatches = round.matches.some((m: any) => m.status === 'WAITING');
+            const allMatchesFinished = round.matches.every((m: ITournamentMatch) => m.status === 'FINISHED');
+            const hasWaitingMatches = round.matches.some((m: ITournamentMatch) => m.status === 'WAITING');
             
             console.log(`[TournamentRoom] Round ${round.round}: allFinished=${allMatchesFinished}, hasWaiting=${hasWaitingMatches}`);
             
             if (allMatchesFinished && i + 1 < tournament.bracket.length) {
                 // Текущий раунд завершен, нужно создать следующий
                 const nextRound = tournament.bracket[i + 1];
-                const nextRoundHasWaitingMatches = nextRound.matches.some((m: any) => m.status === 'WAITING');
+                const nextRoundHasWaitingMatches = nextRound.matches.some((m: ITournamentMatch) => m.status === 'WAITING');
                 
                 if (nextRoundHasWaitingMatches) {
                     console.log(`[TournamentRoom] Round ${round.round} finished, creating next round ${nextRound.round}`);
@@ -591,11 +748,10 @@ export async function checkAndCreateNextRound(io: Server, tournament: ITournamen
     }
 }
 
-/**
- * Ускоряет матчи между ботами
- */
 async function accelerateBotMatches(io: Server, tournament: ITournament, currentRound: any): Promise<void> {
     try {
+        let acceleratedAny = false;
+        
         for (const match of currentRound.matches) {
             if (match.status === 'ACTIVE' && match.player1 && match.player2) {
                 // Проверяем, есть ли матчи только между ботами
@@ -628,15 +784,30 @@ async function accelerateBotMatches(io: Server, tournament: ITournament, current
                         });
                         
                         // Продвигаем победителя
-                        await advanceTournamentWinner(io, tournament._id.toString(), room.matchId, winner);
+                        await advanceWinnerInTournament(io, tournament._id.toString(), room.matchId, winner);
                         
                         console.log(`[TournamentRoom] Accelerated bot match ${room.matchId}, winner: ${winner.username}`);
+                        acceleratedAny = true;
+                        
+                        // КРИТИЧЕСКИ ВАЖНО: После каждого ускоренного матча перепроверяем турнир
+                        setTimeout(async () => {
+                            try {
+                                const updatedTournament = await Tournament.findById(tournament._id);
+                                if (updatedTournament) {
+                                    console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after bot vs bot match`);
+                                    await checkAndCreateNextRound(io, updatedTournament);
+                                }
+                            } catch (error) {
+                                console.error(`[TournamentRoom] Error in recheck after bot vs bot match:`, error);
+                            }
+                        }, 500); // Быстрая перепроверка для бот-матчей
                     }
                 }
             }
         }
         
-        // Перепроверяем турнир после ускорения матчей
+        // КРИТИЧЕСКИ ВАЖНО: ВСЕГДА перепроверяем турнир после вызова accelerateBotMatches
+        console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after accelerateBotMatches call`);
         setTimeout(async () => {
             try {
                 const updatedTournament = await Tournament.findById(tournament._id);
@@ -646,15 +817,12 @@ async function accelerateBotMatches(io: Server, tournament: ITournament, current
             } catch (error) {
                 console.error(`[TournamentRoom] Error in recheck after accelerateBotMatches:`, error);
             }
-        }, 1000);
+        }, 1500); // Достаточная задержка для завершения всех операций
     } catch (error) {
         console.error(`[TournamentRoom] Error accelerating bot matches:`, error);
     }
 }
 
-/**
- * Создает матчи следующего раунда
- */
 async function createNextRoundMatches(io: Server, tournament: ITournament, currentRoundIndex: number): Promise<void> {
     try {
         console.log(`[TournamentRoom] Creating next round matches for tournament ${tournament._id}`);
@@ -669,9 +837,10 @@ async function createNextRoundMatches(io: Server, tournament: ITournament, curre
 
         // Получаем победителей текущего раунда
         const currentRound = tournament.bracket[currentRoundIndex];
-        const winners = currentRound.matches.map((m: any) => m.winner).filter((w: any) => w !== null);
+        const winners = currentRound.matches.map((m: ITournamentMatch) => m.winner).filter((w: any) => w !== null);
 
         console.log(`[TournamentRoom] Winners from round ${currentRound.round}:`, winners.map(w => w?.username));
+        console.log(`[TournamentRoom] Need ${nextRound.matches.length * 2} winners, have ${winners.length}`);
 
         if (winners.length < nextRound.matches.length * 2) {
             console.error(`[TournamentRoom] Not enough winners for next round`);
@@ -721,13 +890,16 @@ async function createNextRoundMatches(io: Server, tournament: ITournament, curre
             if (room) {
                 console.log(`[TournamentRoom] Created room for next round match ${match.matchId}`);
 
-                // Если оба игрока боты, ускоряем матч
+                // Если оба игрока боты, запускаем НЕМЕДЛЕННУЮ автоматическую игру
                 if (match.player1.isBot && match.player2.isBot) {
                     console.log(`[TournamentRoom] Starting immediate bot vs bot match ${match.matchId}`);
+                    // Немедленно завершаем матч ботов без задержки
                     setTimeout(() => {
                         accelerateSingleBotMatch(io, room, tournament);
-                    }, 500);
+                    }, 500); // Минимальная задержка для инициализации
                 }
+            } else {
+                console.error(`[TournamentRoom] Failed to create room for match ${match.matchId}`);
             }
         }
 
@@ -742,16 +914,13 @@ async function createNextRoundMatches(io: Server, tournament: ITournament, curre
             if (updatedTournament) {
                 await checkAndCreateNextRound(io, updatedTournament);
             }
-        }, 2000);
+        }, 2000); // Даем время ботам завершить свои матчи
         
     } catch (error) {
         console.error(`[TournamentRoom] Error creating next round matches:`, error);
     }
 }
 
-/**
- * Ускоряет отдельный матч ботов
- */
 async function accelerateSingleBotMatch(io: Server, room: any, tournament: any): Promise<void> {
     try {
         console.log(`[TournamentRoom] Accelerating single bot match ${room.matchId}`);
@@ -759,10 +928,11 @@ async function accelerateSingleBotMatch(io: Server, room: any, tournament: any):
         // Случайно выбираем победителя
         const winner = room.players[Math.floor(Math.random() * room.players.length)];
 
-        // Обновляем статус комнаты
+        // Обновляем статус комнаты в памяти
         room.status = 'FINISHED';
         room.winner = winner;
 
+        // Обновляем статус в базе данных
         if (tournamentRooms[room.matchId]) {
             tournamentRooms[room.matchId] = room;
         }
@@ -770,6 +940,8 @@ async function accelerateSingleBotMatch(io: Server, room: any, tournament: any):
             { matchId: room.matchId },
             { status: 'FINISHED', winner }
         );
+
+        console.log(`[TournamentRoom] Updated accelerated bot match ${room.matchId} status to FINISHED`);
 
         // Уведомляем о завершении матча
         io.to(`tournament-${room.matchId}`).emit('tournamentGameEnd', {
@@ -779,29 +951,27 @@ async function accelerateSingleBotMatch(io: Server, room: any, tournament: any):
         });
 
         // Продвигаем победителя
-        await advanceTournamentWinner(io, tournament._id.toString(), room.matchId, winner);
+        await advanceWinnerInTournament(io, tournament._id.toString(), room.matchId, winner);
 
         console.log(`[TournamentRoom] Accelerated bot match ${room.matchId} finished, winner: ${winner.username}`);
         
-        // Перепроверяем турнир после ускорения матча
+        // КРИТИЧЕСКИ ВАЖНО: После ускорения матча перепроверяем турнир
         setTimeout(async () => {
             try {
                 const updatedTournament = await Tournament.findById(tournament._id);
                 if (updatedTournament) {
+                    console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after accelerated match`);
                     await checkAndCreateNextRound(io, updatedTournament);
                 }
             } catch (error) {
                 console.error(`[TournamentRoom] Error in recheck after accelerated match:`, error);
             }
-        }, 1000);
+        }, 1000); // Небольшая задержка для завершения всех операций
     } catch (error) {
         console.error(`[TournamentRoom] Error accelerating single bot match:`, error);
     }
 }
 
-/**
- * Завершает турнир
- */
 async function finishTournament(io: Server, tournament: ITournament, winner: any): Promise<void> {
     try {
         console.log(`[TournamentRoom] Finishing tournament ${tournament._id}, winner: ${winner.username}`);
@@ -809,6 +979,9 @@ async function finishTournament(io: Server, tournament: ITournament, winner: any
         tournament.status = 'FINISHED';
         tournament.winner = winner;
         tournament.finishedAt = new Date();
+
+        // Рассчитываем и выплачиваем призы
+        await distributePrizes(io, tournament);
 
         await tournament.save();
 
@@ -852,6 +1025,157 @@ async function finishTournament(io: Server, tournament: ITournament, winner: any
     } catch (error) {
         console.error(`[TournamentRoom] Error finishing tournament:`, error);
     }
+}
+
+async function distributePrizes(io: Server, tournament: ITournament): Promise<void> {
+    try {
+        console.log(`[TournamentRoom] Distributing prizes for tournament ${tournament._id}`);
+
+        const totalPrizePool = tournament.prizePool;
+        const platformCommission = (totalPrizePool * tournament.platformCommission) / 100;
+        const netPrizePool = totalPrizePool - platformCommission;
+
+        // Распределение призов (пример: 60% - 1 место, 30% - 2 место, 10% - 3-4 места)
+        const prizeDistribution = {
+            1: 0.6,  // 60% победителю
+            2: 0.3,  // 30% финалисту
+            3: 0.1   // 10% полуфиналистам (делится между ними)
+        };
+
+        // Находим финалистов и полуфиналистов
+        const finalRound = tournament.bracket[tournament.bracket.length - 1];
+        const semiFinalRound = tournament.bracket[tournament.bracket.length - 2];
+
+        if (finalRound && finalRound.matches.length > 0) {
+            const finalMatch = finalRound.matches[0];
+            
+            // Приз победителю
+            if (tournament.winner && !tournament.winner.isBot) {
+                const winnerPrize = Math.floor(netPrizePool * prizeDistribution[1]);
+                await awardPrize(tournament.winner._id, winnerPrize, 'Победа в турнире', tournament.name);
+            }
+
+            // Приз финалисту (2 место)
+            if (tournament.winner) {
+                const finalist = finalMatch.player1._id === tournament.winner._id ? finalMatch.player2 : finalMatch.player1;
+                if (finalist && !finalist.isBot) {
+                    const finalistPrize = Math.floor(netPrizePool * prizeDistribution[2]);
+                    await awardPrize(finalist._id, finalistPrize, '2 место в турнире', tournament.name);
+                }
+            }
+
+            // Призы полуфиналистам (3-4 места)
+            if (semiFinalRound && semiFinalRound.matches.length > 0) {
+                const semifinalPrize = Math.floor((netPrizePool * prizeDistribution[3]) / semiFinalRound.matches.length);
+                
+                for (const match of semiFinalRound.matches) {
+                    // Находим проигравших в полуфинале
+                    if (match.winner) {
+                        const loser = match.winner._id === match.player1._id ? match.player2 : match.player1;
+                        
+                        if (loser && !loser.isBot) {
+                            await awardPrize(loser._id, semifinalPrize, '3-4 место в турнире', tournament.name);
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log(`[TournamentRoom] Prizes distributed for tournament ${tournament._id}`);
+    } catch (error) {
+        console.error(`[TournamentRoom] Error distributing prizes:`, error);
+    }
+}
+
+/**
+ * Выдает приз игроку
+ */
+async function awardPrize(userId: string, amount: number, reason: string, tournamentName: string): Promise<void> {
+    try {
+        const user = await User.findById(userId);
+        if (!user) return;
+
+        user.balance += amount;
+        await user.save();
+
+        // Создаем транзакцию
+        await new Transaction({
+            user: userId,
+            type: 'TOURNAMENT_WINNINGS',
+            amount
+        }).save();
+
+        console.log(`[TournamentRoom] Awarded ${amount} to ${user.username} for ${reason}`);
+    } catch (error) {
+        console.error(`[TournamentRoom] Error awarding prize:`, error);
+    }
+}
+
+/**
+ * Симулирует матч между ботами
+ */
+async function simulateBotVsBotMatch(io: Server, room: any, tournament: any): Promise<void> {
+    try {
+        console.log(`[TournamentRoom] Simulating bot vs bot match ${room.matchId}`);
+
+        // Случайно выбираем победителя
+        const winner = room.players[Math.floor(Math.random() * room.players.length)];
+
+        // Имитируем время игры (30-120 секунд)
+        const gameTime = 30000 + Math.random() * 90000;
+
+        setTimeout(async () => {
+            try {
+                // Обновляем статус комнаты в памяти
+                room.status = 'FINISHED';
+                room.winner = winner;
+
+                // КРИТИЧЕСКИ ВАЖНО: Обновляем статус в базе данных
+                if (tournamentRooms[room.matchId]) {
+                    tournamentRooms[room.matchId] = room;
+                }
+                await TournamentRoom.findOneAndUpdate(
+                    { matchId: room.matchId },
+                    { status: 'FINISHED', winner }
+                );
+
+                console.log(`[TournamentRoom] Updated bot match ${room.matchId} status to FINISHED in database`);
+
+                // Уведомляем о завершении матча
+                io.to(`tournament-${room.matchId}`).emit('tournamentGameEnd', {
+                    matchId: room.matchId,
+                    winner,
+                    isDraw: false
+                });
+
+                // Продвигаем победителя
+                await advanceTournamentWinner(io, tournament._id.toString(), room.matchId, winner);
+
+                console.log(`[TournamentRoom] Bot match ${room.matchId} finished, winner: ${winner.username}`);
+            } catch (innerError) {
+                console.error(`[TournamentRoom] Error in bot match completion:`, innerError);
+            }
+        }, gameTime);
+    } catch (error) {
+        console.error(`[TournamentRoom] Error simulating bot match:`, error);
+    }
+}
+
+/**
+ * Очищает неактивные турнирные комнаты
+ */
+export function cleanupInactiveTournamentRooms(): void {
+    const now = Date.now();
+    const CLEANUP_TIMEOUT = 60 * 60 * 1000; // 1 час
+
+    Object.keys(tournamentRooms).forEach(matchId => {
+        const room = tournamentRooms[matchId];
+        if (room.status === 'FINISHED' && 
+            (now - new Date(room.updatedAt).getTime()) > CLEANUP_TIMEOUT) {
+            delete tournamentRooms[matchId];
+            console.log(`[TournamentRoom] Cleaned up inactive room ${matchId}`);
+        }
+    });
 }
 
 // Запускаем очистку каждые 30 минут

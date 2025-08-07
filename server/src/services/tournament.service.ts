@@ -413,18 +413,29 @@ export async function advanceTournamentWinner(
         const currentRound = tournament.bracket[currentRoundIndex];
         const allMatchesFinished = currentRound.matches.every(m => m.status === 'FINISHED');
 
-        if (allMatchesFinished) {
-            console.log(`[Tournament] Round ${currentRound.round} finished`);
-            
-            console.log(`[Tournament] Round processing will be handled by tournament room service`);
-        }
-
         await tournament.save();
         activeTournaments[tournamentId] = tournament;
 
         io.emit('tournamentUpdated', tournament);
 
         console.log(`[Tournament] Winner ${winner.username} advanced in tournament ${tournamentId}`);
+
+        // КРИТИЧЕСКИ ВАЖНО: Проверяем, нужно ли создать следующий раунд
+        if (allMatchesFinished) {
+            console.log(`[Tournament] Round ${currentRound.round} finished, checking next round`);
+            
+            const { checkAndCreateNextRound } = await import('./tournamentRoom.service');
+            setTimeout(async () => {
+                try {
+                    const updatedTournament = await Tournament.findById(tournamentId);
+                    if (updatedTournament) {
+                        await checkAndCreateNextRound(io, updatedTournament);
+                    }
+                } catch (error) {
+                    console.error(`[Tournament] Error checking next round:`, error);
+                }
+            }, 500);
+        }
     } catch (error) {
         console.error(`[Tournament] Error advancing winner:`, error);
     }

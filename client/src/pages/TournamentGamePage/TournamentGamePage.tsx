@@ -144,18 +144,59 @@ const TournamentGamePage: React.FC = () => {
             gameType: data.gameType,
             players: data.players,
             myPlayerId: data.myPlayerId,
+            userIdFromAuth: user?._id,
             gameState: data.gameState,
-            currentTurn: data.gameState?.turn
+            currentTurn: data.gameState?.turn,
+            myPlayerIdType: typeof data.myPlayerId,
+            userIdType: typeof user?._id,
+            idsEqual: data.myPlayerId === user?._id
         });
+        
+        // Проверяем, что myPlayerId соответствует текущему пользователю
+        if (data.myPlayerId !== user?._id) {
+            console.warn('[TournamentGame] myPlayerId mismatch!', {
+                received: data.myPlayerId,
+                expected: user?._id
+            });
+        }
+        
         setGameData(data);
         setLoading(false);
         setError(null);
     };
 
     const handleGameUpdate = (data: { matchId: string; gameState: any }) => {
-        console.log('[TournamentGame] Game updated:', data);
-        if (gameData && data.matchId === gameData.matchId) {
-            setGameData(prev => prev ? { ...prev, gameState: data.gameState } : null);
+        console.log('[TournamentGame] Game updated:', {
+            receivedMatchId: data.matchId,
+            currentMatchId: currentMatchId,
+            gameDataMatchId: gameData?.matchId,
+            hasGameData: !!gameData,
+            gameState: data.gameState,
+            currentTurn: data.gameState?.turn
+        });
+        
+        // Проверяем, что обновление для текущего матча
+        if (data.matchId === currentMatchId) {
+            console.log('[TournamentGame] Updating game state for current match');
+            setGameData(prev => {
+                if (prev) {
+                    const updated = { ...prev, gameState: data.gameState };
+                    console.log('[TournamentGame] Game state updated:', {
+                        oldTurn: prev.gameState?.turn,
+                        newTurn: data.gameState?.turn,
+                        myPlayerId: prev.myPlayerId
+                    });
+                    return updated;
+                } else {
+                    console.log('[TournamentGame] No previous game data to update');
+                    return null;
+                }
+            });
+        } else {
+            console.log('[TournamentGame] Ignoring update for different match:', {
+                received: data.matchId,
+                current: currentMatchId
+            });
         }
     };
 
@@ -212,9 +253,14 @@ const TournamentGamePage: React.FC = () => {
 
     const handleGameError = (data: { matchId: string; error: string }) => {
         console.log('[TournamentGame] Game error:', data);
+        console.log('[TournamentGame] Current match ID:', currentMatchId);
+        console.log('[TournamentGame] Error match ID:', data.matchId);
+        console.log('[TournamentGame] Match IDs equal:', data.matchId === currentMatchId);
+        
         if (data.matchId === currentMatchId) {
             setGameError(data.error);
-            setTimeout(() => setGameError(null), 3000);
+            console.log('[TournamentGame] Setting game error:', data.error);
+            setTimeout(() => setGameError(null), 5000); // Увеличиваем время показа ошибки
         }
     };
 
@@ -231,17 +277,36 @@ const TournamentGamePage: React.FC = () => {
             return;
         }
         
+        if (!gameData) {
+            console.log('[TournamentGame] Cannot make move - no game data');
+            return;
+        }
+        
+        // Проверяем, что это наш ход
+        const isMyTurn = gameData.gameState.turn === gameData.myPlayerId;
+        if (!isMyTurn) {
+            console.log('[TournamentGame] Not my turn:', {
+                currentTurn: gameData.gameState.turn,
+                myPlayerId: gameData.myPlayerId,
+                isEqual: gameData.gameState.turn === gameData.myPlayerId
+            });
+            return;
+        }
+        
         const move = { cellIndex };
         console.log('[TournamentGame] Making tic-tac-toe move:', {
             cellIndex,
             move,
             currentMatchId,
-            gameData: gameData ? {
+            myPlayerId: gameData.myPlayerId,
+            currentTurn: gameData.gameState.turn,
+            isMyTurn,
+            gameData: {
                 matchId: gameData.matchId,
                 gameType: gameData.gameType,
                 myPlayerId: gameData.myPlayerId,
                 currentTurn: gameData.gameState?.turn
-            } : null
+            }
         });
         
         socket.emit('tournamentMove', { matchId: currentMatchId, move });
@@ -263,6 +328,15 @@ const TournamentGamePage: React.FC = () => {
         const { gameType, gameState, players, myPlayerId } = gameData;
         const isMyTurn = gameState.turn === myPlayerId;
         const myPlayerIndex = players.findIndex(p => p._id === myPlayerId) as 0 | 1;
+        
+        console.log('[TournamentGame] Render game board:', {
+            gameType,
+            currentTurn: gameState.turn,
+            myPlayerId,
+            isMyTurn,
+            myPlayerIndex,
+            players: players.map(p => ({ id: p._id, username: p.username }))
+        });
         
         switch (gameType) {
             case 'tic-tac-toe':
@@ -468,7 +542,16 @@ const TournamentGamePage: React.FC = () => {
     }
 
     const opponent = gameData.players.find(p => p._id !== user?._id);
-    const isMyTurn = gameData.gameState.turn === user?._id;
+    const isMyTurn = gameData.gameState.turn === gameData.myPlayerId;
+    
+    console.log('[TournamentGame] Turn info:', {
+        currentTurn: gameData.gameState.turn,
+        myPlayerId: gameData.myPlayerId,
+        userIdFromAuth: user?._id,
+        isMyTurn,
+        turnType: typeof gameData.gameState.turn,
+        myPlayerIdType: typeof gameData.myPlayerId
+    });
 
     return (
         <div className={styles.container}>
