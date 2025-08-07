@@ -282,6 +282,16 @@ export const reviewKycSubmission = async (req: Request, res: Response) => {
         }
         
         await user.save();
+
+        // Отправляем обновление KYC статуса через Socket.IO
+        if (io) {
+            io.emit('kycStatusUpdated', {
+                userId: userId,
+                kycStatus: user.kycStatus,
+                kycRejectionReason: user.kycRejectionReason
+            });
+        }
+
         res.json({ message: `User's request ${user.username} has been processed.` });
 
     } catch (error) {

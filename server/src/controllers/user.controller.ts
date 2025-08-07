@@ -6,6 +6,9 @@ import GameRecord from '../models/GameRecord.model';
 import Transaction from '../models/Transaction.model';
 import User from '../models/User.model';
 
+// Import Socket.IO
+import { getIO } from '../socket';
+
 // @desc    Get user profile
 // @route   GET /api/users/profile
 // @access  Private
@@ -110,12 +113,27 @@ export const updateUserBalance = async (req: Request, res: Response) => {
   await user.save();
 
   // Создаем запись о транзакции
-  await Transaction.create({
+  const transaction = await Transaction.create({
     user: user._id,
     type: numericAmount > 0 ? 'DEPOSIT' : 'WITHDRAWAL',
     amount: Math.abs(numericAmount), // Сумма в транзакции всегда положительная
     status: 'COMPLETED',
   });
+
+  // Отправляем обновление баланса через Socket.IO
+  const io = getIO();
+  if (io) {
+    io.emit('balanceUpdated', {
+      userId: (user._id as any).toString(),
+      newBalance: user.balance,
+      transaction: {
+        type: transaction.type,
+        amount: transaction.amount,
+        status: transaction.status,
+        createdAt: new Date()
+      }
+    });
+  }
 
   // Возвращаем обновленные данные пользователя
   res.json({
@@ -124,6 +142,8 @@ export const updateUserBalance = async (req: Request, res: Response) => {
     email: user.email,
     balance: user.balance,
     avatar: user.avatar,
+    kycStatus: user.kycStatus,
+    role: user.role
   });
 };
 
@@ -186,6 +206,16 @@ export const submitKyc = async (req: Request, res: Response) => {
     user.kycStatus = 'PENDING';
     user.kycRejectionReason = undefined; // Очищаем причину отказа при новой подаче
     await user.save();
+
+    // Отправляем обновление KYC статуса через Socket.IO
+    const io = getIO();
+    if (io) {
+        io.emit('kycStatusUpdated', {
+            userId: (user._id as any).toString(),
+            kycStatus: user.kycStatus,
+            kycRejectionReason: user.kycRejectionReason
+        });
+    }
 
     res.json({ status: user.kycStatus, message: 'The documents have been successfully submitted for verification.' });
 };

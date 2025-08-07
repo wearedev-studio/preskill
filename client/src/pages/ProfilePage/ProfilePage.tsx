@@ -1,6 +1,7 @@
 import React, { useState, useEffect, FormEvent, ChangeEvent, FC } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import Avatar from '../../components/common/Avatar'; // 1. Импортируем новый компонент
 
 import { IGameRecord, ITransaction } from '../../types/entities';
@@ -8,6 +9,7 @@ import styles from './ProfilePage.module.css'; // Import the CSS module
 import { API_URL } from '../../api/index';
 import { submitKycDocument } from '@/services/api';
 import KycModal from '../../components/modals/KycModal'; // Импортируем модальное окно
+import PaymentStatusModal from '../../components/modals/PaymentStatusModal'; // Импортируем модальное окно платежей
 
 // Helper component for the table to keep the main component clean
 // Вспомогательный компонент для таблицы
@@ -53,6 +55,7 @@ const KYCStatus: FC<KYCStatusProps> = ({ user, onVerifyClick }) => {
 
 const ProfilePage: React.FC = () => {
     const { user, refreshUser } = useAuth();
+    const { socket } = useSocket();
 
     const [gameHistory, setGameHistory] = useState<IGameRecord[]>([]);
     const [transactionHistory, setTransactionHistory] = useState<ITransaction[]>([]);
@@ -76,6 +79,16 @@ const ProfilePage: React.FC = () => {
     const [kycMessage, setKycMessage] = useState({ type: '', text: '' });
 
     const [isKycModalOpen, setIsKycModalOpen] = useState(false);
+    
+    // Состояния для модального окна платежей
+    const [paymentModal, setPaymentModal] = useState({
+        isOpen: false,
+        status: 'success' as 'success' | 'error' | 'loading',
+        title: '',
+        message: '',
+        amount: 0,
+        operation: 'deposit' as 'deposit' | 'withdraw'
+    });
 
     const handleKycSuccess = async () => {
         await refreshUser();
@@ -129,6 +142,55 @@ const ProfilePage: React.FC = () => {
         fetchHistory();
     }, []);
 
+    // Обработчик Socket.IO событий для обновления баланса в реальном времени
+    useEffect(() => {
+        if (!socket || !user) return;
+
+        const handleBalanceUpdate = (data: {
+            userId: string;
+            newBalance: number;
+            transaction: {
+                type: string;
+                amount: number;
+                status: string;
+                createdAt: string;
+            };
+        }) => {
+            // Проверяем, что обновление для текущего пользователя
+            if (data.userId === user._id) {
+                console.log('[ProfilePage] Balance updated via Socket.IO:', data);
+                
+                // Обновляем контекст пользователя
+                refreshUser();
+                
+                // Обновляем историю транзакций
+                fetchHistory();
+            }
+        };
+
+        const handleKycStatusUpdate = (data: {
+            userId: string;
+            kycStatus: string;
+            kycRejectionReason?: string;
+        }) => {
+            // Проверяем, что обновление для текущего пользователя
+            if (data.userId === user._id) {
+                console.log('[ProfilePage] KYC status updated via Socket.IO:', data);
+                
+                // Обновляем контекст пользователя
+                refreshUser();
+            }
+        };
+
+        socket.on('balanceUpdated', handleBalanceUpdate);
+        socket.on('kycStatusUpdated', handleKycStatusUpdate);
+
+        return () => {
+            socket.off('balanceUpdated', handleBalanceUpdate);
+            socket.off('kycStatusUpdated', handleKycStatusUpdate);
+        };
+    }, [socket, user, refreshUser]);
+
     const handlePasswordChange = async (e: FormEvent) => {
         e.preventDefault();
         setPasswordMessage({ type: '', text: '' });
@@ -157,19 +219,57 @@ const ProfilePage: React.FC = () => {
         }
 
         if (isNaN(amount) || amount <= 0) {
-            setBalanceMessage({ type: 'error', text: 'Please enter a valid positive amount..' });
+            setPaymentModal({
+                isOpen: true,
+                status: 'error',
+                title: 'Ошибка ввода',
+                message: 'Пожалуйста, введите корректную положительную сумму',
+                amount: 0,
+                operation
+            });
             return;
         }
+
+        // Показываем модальное окно загрузки
+        setPaymentModal({
+            isOpen: true,
+            status: 'loading',
+            title: 'Обработка платежа',
+            message: `Обрабатываем ${operation === 'deposit' ? 'пополнение' : 'вывод'} средств...`,
+            amount,
+            operation
+        });
 
         const amountToSend = operation === 'deposit' ? Number(balanceAmount) : -Number(balanceAmount);
         
         try {
-            await axios.post(`${API_URL}/api/users/balance`, { amount: amountToSend });
-            setBalanceMessage({ type: 'success', text: 'Balance updated successfully!' });
+            const response = await axios.post(`${API_URL}/api/users/balance`, { amount: amountToSend });
+            
+            // Обновляем контекст пользователя с новыми данными
+            await refreshUser();
+            
+            // Показываем успешное модальное окно
+            setPaymentModal({
+                isOpen: true,
+                status: 'success',
+                title: 'Операция выполнена успешно!',
+                message: `${operation === 'deposit' ? 'Пополнение' : 'Вывод'} средств прошел успешно`,
+                amount,
+                operation
+            });
+            
             setBalanceAmount('');
             fetchHistory();
         } catch (err: any) {
-             setBalanceMessage({ type: 'error', text: err.response?.data?.message || 'Operation error' });
+            // Показываем модальное окно ошибки
+            setPaymentModal({
+                isOpen: true,
+                status: 'error',
+                title: 'Ошибка операции',
+                message: err.response?.data?.message || 'Произошла ошибка при обработке платежа',
+                amount,
+                operation
+            });
         }
     }
 
@@ -195,7 +295,14 @@ const ProfilePage: React.FC = () => {
             setAvatarFile(null);
             setAvatarPreview(null);
         } catch (error) {
-            alert('Failed to upload avatar. Make sure it is an image and its size is less than 5MB.');
+            setPaymentModal({
+                isOpen: true,
+                status: 'error',
+                title: 'Ошибка загрузки',
+                message: 'Не удалось загрузить аватар. Убедитесь, что это изображение размером менее 5МБ.',
+                amount: 0,
+                operation: 'deposit'
+            });
         }
     };
 
@@ -321,6 +428,15 @@ const ProfilePage: React.FC = () => {
                 </div>
             </div>
             <KycModal isOpen={isKycModalOpen} onClose={() => setIsKycModalOpen(false)} onSuccess={handleKycSuccess} />
+            <PaymentStatusModal
+                isOpen={paymentModal.isOpen}
+                status={paymentModal.status}
+                title={paymentModal.title}
+                message={paymentModal.message}
+                amount={paymentModal.amount}
+                operation={paymentModal.operation}
+                onClose={() => setPaymentModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </>
     );
 };

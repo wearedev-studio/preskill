@@ -38,6 +38,14 @@ export interface Room {
 export const rooms: Record<string, Room> = {};
 export const userSocketMap: Record<string, string> = {};
 
+// Глобальная переменная для доступа к IO из других модулей
+let globalIO: Server | null = null;
+
+export const getIO = (): Server | null => globalIO;
+export const setIO = (io: Server): void => {
+    globalIO = io;
+};
+
 export const gameLogics: Record<Room['gameType'], IGameLogic> = {
     'tic-tac-toe': ticTacToeLogic,
     'checkers': checkersLogic,
@@ -108,7 +116,7 @@ async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolea
         io.to(room.id).emit('gameEnd', { winner: null, isDraw: true });
     } else if (winner && loser) {
         if (!isBot(winner)) {
-            await User.findByIdAndUpdate(winner.user._id, { $inc: { balance: room.bet } });
+            const updatedWinner = await User.findByIdAndUpdate(winner.user._id, { $inc: { balance: room.bet } }, { new: true });
             await GameRecord.create({
                 user: winner.user._id,
                 gameName: gameNameForDB,
@@ -116,14 +124,28 @@ async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolea
                 amountChanged: room.bet,
                 opponent: loser.user.username
             });
-            await Transaction.create({
+            const winnerTransaction = await Transaction.create({
                 user: winner.user._id,
                 type: 'WAGER_WIN',
                 amount: room.bet
             });
+
+            // Отправляем обновление баланса через Socket.IO для победителя
+            if (updatedWinner) {
+                io.emit('balanceUpdated', {
+                    userId: (winner.user._id as any).toString(),
+                    newBalance: updatedWinner.balance,
+                    transaction: {
+                        type: winnerTransaction.type,
+                        amount: winnerTransaction.amount,
+                        status: winnerTransaction.status,
+                        createdAt: new Date()
+                    }
+                });
+            }
         }
         if (!isBot(loser)) {
-            await User.findByIdAndUpdate(loser.user._id, { $inc: { balance: -room.bet } });
+            const updatedLoser = await User.findByIdAndUpdate(loser.user._id, { $inc: { balance: -room.bet } }, { new: true });
             await GameRecord.create({
                 user: loser.user._id,
                 gameName: gameNameForDB,
@@ -131,11 +153,25 @@ async function endGame(io: Server, room: Room, winnerId?: string, isDraw: boolea
                 amountChanged: -room.bet,
                 opponent: winner.user.username
             });
-            await Transaction.create({
+            const loserTransaction = await Transaction.create({
                 user: loser.user._id,
                 type: 'WAGER_LOSS',
                 amount: room.bet
             });
+
+            // Отправляем обновление баланса через Socket.IO для проигравшего
+            if (updatedLoser) {
+                io.emit('balanceUpdated', {
+                    userId: (loser.user._id as any).toString(),
+                    newBalance: updatedLoser.balance,
+                    transaction: {
+                        type: loserTransaction.type,
+                        amount: loserTransaction.amount,
+                        status: loserTransaction.status,
+                        createdAt: new Date()
+                    }
+                });
+            }
         }
         io.to(room.id).emit('gameEnd', { winner, isDraw: false });
     }
@@ -236,6 +272,8 @@ async function processBotMoveInRegularGame(
 }
 
 export const initializeSocket = (io: Server) => {
+    // Сохраняем ссылку на IO для использования в других модулях
+    setIO(io);
 
     io.use(async (socket: Socket, next: (err?: Error) => void) => {
         try {
