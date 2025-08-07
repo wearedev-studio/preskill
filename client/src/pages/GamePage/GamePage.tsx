@@ -8,6 +8,7 @@ import CheckersBoard from '../../components/game/CheckersBoard';
 import ChessBoard from '../../components/game/ChessBoard';
 import BackgammonBoard from '../../components/game/BackgammonBoard';
 import ErrorModal from '../../components/modals/ErrorModal';
+import GameResultModal from '../../components/modals/GameResultModal';
 import { Chess } from 'chess.js';
 import styles from './GamePage.module.css';
 
@@ -48,6 +49,11 @@ const GamePage: React.FC = () => {
     const [countdown, setCountdown] = useState(0);
     const [redirectCountdown, setRedirectCountdown] = useState(5);
     const [errorModal, setErrorModal] = useState({ isOpen: false, message: '' });
+    const [gameResultModal, setGameResultModal] = useState({
+        isOpen: false,
+        result: 'win' as 'win' | 'lose' | 'draw',
+        opponentName: ''
+    });
     const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
@@ -78,13 +84,29 @@ const GamePage: React.FC = () => {
         const onGameEnd = async ({ winner, isDraw }: { winner: Player | null, isDraw: boolean }) => {
             console.log('Game ended:', { winner, isDraw });
             
+            // Определяем результат для модального окна
+            let result: 'win' | 'lose' | 'draw';
+            let opponentName = '';
+            
             if (isDraw) {
+                result = 'draw';
                 setGameMessage('🤝 Draw!');
             } else if (winner?.user.username === user?.username) {
+                result = 'win';
                 setGameMessage('🎉 You won!');
+                opponentName = roomState?.players.find(p => p.user._id !== user?._id)?.user.username || '';
             } else {
+                result = 'lose';
                 setGameMessage(`😔 You lost. Winner: ${winner?.user.username || 'Unknown'}`);
+                opponentName = winner?.user.username || 'Unknown';
             }
+
+            // Показываем модальное окно результата
+            setGameResultModal({
+                isOpen: true,
+                result,
+                opponentName
+            });
 
             try {
                 await refreshUser();
@@ -183,6 +205,19 @@ const GamePage: React.FC = () => {
 
     const closeErrorModal = () => {
         setErrorModal({ isOpen: false, message: '' });
+    };
+
+    const closeGameResultModal = () => {
+        setGameResultModal({ isOpen: false, result: 'win', opponentName: '' });
+    };
+
+    const handleBackToLobby = () => {
+        if (roomId?.startsWith('tourney-')) {
+            const tournamentId = roomId.split('-')[1];
+            navigate(`/tournaments/${tournamentId}`);
+        } else {
+            navigate(`/lobby/${gameType}`);
+        }
     };
 
     const handleRollDice = () => {
@@ -328,15 +363,11 @@ const GamePage: React.FC = () => {
                         </h3>
                     </div>
                 ) : (
-                    <div className={`${styles.statusMessage} ${styles.statusGameEnd}`}>
-                        <div className={styles.statusIcon}>
-                            {gameMessage.includes('won') ? '🏆' : gameMessage.includes('Draw') ? '🤝' : '😔'}
-                        </div>
-                        <h3 className={`${styles.statusTitle} ${styles.statusTitleEnd}`}>{gameMessage}</h3>
-                        <div className={styles.statusCountdown}>
-                            <p>Return in: <span style={{fontWeight: 'bold'}}>{redirectCountdown} s</span></p>
-                            <button onClick={backButtonAction} className={`${styles.btn} ${styles.btnPrimary}`}>Back now</button>
-                        </div>
+                    <div className={`${styles.statusMessage} ${styles.statusTurn}`}>
+                        <h3 className={`${styles.statusTitle} ${styles.statusTitleMyTurn}`}>
+                            🎮 Game completed
+                        </h3>
+                        <p>Check the result in the modal window</p>
                     </div>
                 )}
             </div>
@@ -352,6 +383,21 @@ const GamePage: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <ErrorModal
+                isOpen={errorModal.isOpen}
+                message={errorModal.message}
+                onClose={closeErrorModal}
+            />
+
+            <GameResultModal
+                isOpen={gameResultModal.isOpen}
+                result={gameResultModal.result}
+                opponentName={gameResultModal.opponentName}
+                onClose={closeGameResultModal}
+                onBackToLobby={handleBackToLobby}
+                countdown={redirectCountdown}
+            />
         </div>
     );
 };

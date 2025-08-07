@@ -1,7 +1,7 @@
 .container {
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 20px;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
 }
@@ -10,104 +10,155 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 15px 20px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 2rem;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #3b82f6);
 }
 
 .backButton {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, #6b7280, #4b5563);
     color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 14px;
     transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
 
 .backButton:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
 }
 
 .header h1 {
     color: white;
     margin: 0;
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 1.75rem;
+    font-weight: 700;
+    text-align: center;
+    flex: 1;
 }
 
 .gameInfo {
-    background: rgba(255, 255, 255, 0.2);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
-    padding: 8px 16px;
+    padding: 0.75rem 1.5rem;
     border-radius: 20px;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 0.875rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .playersInfo {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 30px;
-    margin-bottom: 30px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
-    padding: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    gap: 2rem;
+    margin-bottom: 2rem;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 .player {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 15px 20px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.1);
+    gap: 1rem;
+    padding: 1.5rem 2rem;
+    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.5);
     border: 2px solid transparent;
     transition: all 0.3s ease;
-    min-width: 150px;
+    min-width: 180px;
+    position: relative;
 }
 
 .player.currentTurn {
-    border-color: #4ade80;
-    background: rgba(74, 222, 128, 0.2);
-    box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.4);
 }
 
-.playerName {
-    color: white;
-    font-weight: 600;
-    font-size: 16px;
-    text-align: center;
+.player.currentTurn::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #10b981, #3b82f6, #10b981);
+    border-radius: 18px;
+    z-index: -1;
+    animation: borderGlow 2s linear infinite;
 }
 
-.turnIndicator {
-    color: #4ade80;
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
+@keyframes borderGlow {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
 }
 
+.playerName {
+    color: white;
+    font-weight: 700;
+    font-size: 1.125rem;
+    text-align: center;
+}
+
+.turnIndicator {
+    color: #10b981;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    animation: pulse 2s infinite;
+    background: rgba(16, 185, 129, 0.2);
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
+}
+
 .vs {
     color: white;
-    font-size: 20px;
-    font-weight: bold;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .gameBoard {
@@ -115,12 +166,24 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    padding: 30px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-bottom: 20px;
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 1px solid #475569;
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.gameBoard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #3b82f6, #10b981);
 }
 
 .loading {
@@ -130,14 +193,14 @@
     justify-content: center;
     height: 100vh;
     color: white;
-    gap: 20px;
+    gap: 2rem;
 }
 
 .spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid rgba(255, 255, 255, 0.3);
-    border-top: 4px solid white;
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top: 4px solid #3b82f6;
     border-radius: 50%;
     animation: spin 1s linear infinite;
 }
@@ -148,8 +211,9 @@
 }
 
 .loading p {
-    font-size: 18px;
+    font-size: 1.25rem;
     margin: 0;
+    font-weight: 600;
 }
 
 .error {
@@ -160,18 +224,22 @@
     height: 100vh;
     color: white;
     text-align: center;
-    gap: 20px;
+    gap: 2rem;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border-radius: 20px;
+    margin: 2rem;
+    padding: 3rem;
 }
 
 .error h2 {
     margin: 0;
-    font-size: 24px;
-    color: #ef4444;
+    font-size: 2rem;
+    font-weight: 700;
 }
 
 .error p {
     margin: 0;
-    font-size: 16px;
+    font-size: 1.125rem;
     opacity: 0.9;
 }
 
@@ -186,24 +254,36 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    backdrop-filter: blur(5px);
+    backdrop-filter: blur(8px);
 }
 
 .gameResultModal {
     background: white;
-    border-radius: 20px;
-    padding: 40px;
+    border-radius: 24px;
+    padding: 3rem;
     text-align: center;
-    max-width: 400px;
+    max-width: 500px;
     width: 90%;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-    animation: modalAppear 0.3s ease-out;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    animation: modalAppear 0.4s ease-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.gameResultModal::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24, #3b82f6, #10b981);
 }
 
 @keyframes modalAppear {
     from {
         opacity: 0;
-        transform: scale(0.9) translateY(-20px);
+        transform: scale(0.8) translateY(-30px);
     }
     to {
         opacity: 1;
@@ -212,15 +292,29 @@
 }
 
 .gameResultModal h2 {
-    margin: 0 0 20px 0;
+    margin: 0 0 1.5rem 0;
     color: #1f2937;
-    font-size: 24px;
+    font-size: 2rem;
+    font-weight: 700;
 }
 
 .resultIcon {
-    font-size: 60px;
-    margin-bottom: 15px;
+    font-size: 4rem;
+    margin-bottom: 1rem;
     display: block;
+    animation: bounce 0.6s ease-out;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-15px);
+    }
+    60% {
+        transform: translateY(-8px);
+    }
 }
 
 .winResult {
@@ -236,103 +330,43 @@
 }
 
 .winResult p, .loseResult p, .drawResult p {
-    font-size: 18px;
+    font-size: 1.25rem;
     font-weight: 600;
-    margin: 0 0 10px 0;
+    margin: 0 0 1rem 0;
 }
 
 .resultActions {
-    margin: 30px 0 20px 0;
+    margin: 2rem 0 1rem 0;
 }
 
 .backToTournamentsButton {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: white;
     border: none;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-size: 16px;
-    font-weight: 600;
+    padding: 1rem 2rem;
+    border-radius: 16px;
+    font-size: 1.125rem;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.3s ease;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
 }
 
 .backToTournamentsButton:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(59, 130, 246, 0.4);
 }
 
 .autoRedirect {
-    font-size: 14px;
+    font-size: 0.875rem;
     color: #6b7280;
     margin: 0;
     font-style: italic;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-    
-    .header {
-        flex-direction: column;
-        gap: 15px;
-        text-align: center;
-    }
-    
-    .header h1 {
-        font-size: 20px;
-    }
-    
-    .playersInfo {
-        flex-direction: column;
-        gap: 15px;
-    }
-    
-    .player {
-        min-width: 120px;
-    }
-    
-    .gameBoard {
-        padding: 15px;
-    }
-    
-    .gameResultModal {
-        padding: 30px 20px;
-    }
-}
-
-@media (max-width: 480px) {
-    .header h1 {
-        font-size: 18px;
-    }
-    
-    .playerName {
-        font-size: 14px;
-    }
-    
-    .gameBoard {
-        padding: 10px;
-    }
-    
-    .gameResultModal {
-        padding: 25px 15px;
-    }
-    
-    .resultIcon {
-        font-size: 50px;
-    }
-    
-    .gameResultModal h2 {
-        font-size: 20px;
-    }
-}
-
-/* Стили для сообщений об ошибках игры */
 .gameErrorMessage {
     position: fixed;
-    top: 20px;
+    top: 2rem;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
@@ -351,93 +385,171 @@
 }
 
 .errorContent {
-    background: rgba(239, 68, 68, 0.95);
+    background: linear-gradient(135deg, #ef4444, #dc2626);
     color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    border-radius: 16px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-weight: 500;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-    backdrop-filter: blur(10px);
+    gap: 0.75rem;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Стили для статуса турнира */
 .tournamentStatus {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    padding: 20px;
-    margin: 20px 0;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border: 1px solid #475569;
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.tournamentStatus::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
 
 .tournamentStatus h3 {
-    margin: 0 0 15px 0;
-    color: #ffd700;
-    font-size: 18px;
-    font-weight: 600;
-}
-
-.tournamentStatus p {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    color: #1f2937;
-}
-
-.waitingMessage {
-    color: #059669 !important;
-    font-weight: 600;
-    animation: pulse 2s infinite;
-}
-
-.errorIcon {
-    font-size: 16px;
-}
-
-.errorIcon {
-    font-size: 18px;
-}
-
-/* Стили для завершения турнира */
-.tournamentResult {
-    text-align: center;
-    padding: 20px;
-}
-
-.tournamentResult h3 {
-    margin: 10px 0;
-    color: #333;
-    font-size: 20px;
-}
-
-.tournamentResult p {
-    margin: 8px 0;
-    color: #666;
-    font-size: 16px;
-}
-
-.prizeInfo {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #4CAF50;
-    background: rgba(76, 175, 80, 0.1);
-    padding: 15px;
-    border-radius: 10px;
-    margin: 20px 0;
-    border: 2px solid rgba(76, 175, 80, 0.3);
-}
-
-.gameResultModal h2 {
-    margin: 0 0 20px 0;
-    color: #1f2937;
-    font-size: 26px;
+    margin: 0 0 1rem 0;
+    color: #fbbf24;
+    font-size: 1.375rem;
     font-weight: 700;
 }
 
+.tournamentStatus p {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.125rem;
+    color: white;
+    font-weight: 500;
+}
+
+.waitingMessage {
+    color: #10b981 !important;
+    font-weight: 700;
+    animation: pulse 2s infinite;
+    background: rgba(16, 185, 129, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.errorIcon {
+    font-size: 1.125rem;
+}
+
+.tournamentResult {
+    text-align: center;
+    padding: 2rem;
+}
+
+.tournamentResult h3 {
+    margin: 1rem 0;
+    color: #1f2937;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.tournamentResult p {
+    margin: 0.75rem 0;
+    color: #4b5563;
+    font-size: 1.125rem;
+}
+
+.prizeInfo {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: #059669;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05));
+    padding: 1.5rem;
+    border-radius: 16px;
+    margin: 1.5rem 0;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
 .winResult h3, .tournamentResult h3 {
-    margin: 15px 0;
-    font-size: 22px;
+    margin: 1rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .playersInfo {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1.5rem;
+    }
+    
+    .player {
+        min-width: 150px;
+        padding: 1rem 1.5rem;
+    }
+    
+    .gameBoard {
+        padding: 1rem;
+    }
+    
+    .gameResultModal {
+        padding: 2rem 1.5rem;
+        max-width: 90%;
+    }
+    
+    .tournamentStatus {
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header h1 {
+        font-size: 1.25rem;
+    }
+    
+    .playerName {
+        font-size: 1rem;
+    }
+    
+    .gameBoard {
+        padding: 0.75rem;
+    }
+    
+    .gameResultModal {
+        padding: 1.5rem 1rem;
+    }
+    
+    .resultIcon {
+        font-size: 3rem;
+    }
+    
+    .gameResultModal h2 {
+        font-size: 1.5rem;
+    }
+    
+    .vs {
+        font-size: 1.25rem;
+    }
 }

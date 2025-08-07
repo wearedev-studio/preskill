@@ -1,19 +1,25 @@
 .boardContainer {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 1rem;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
 }
 
 .board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
-    /* Задаем ширину относительно ширины экрана, но не больше 500px */
-    width: 90vw;
-    max-width: 500px;
-    /* Сохраняем пропорции квадрата */
-    aspect-ratio: 1 / 1;
+    grid-template-rows: repeat(8, 1fr);
+    /* Адаптивная ширина с разумными ограничениями */
+    width: min(90vw, 90vh, 500px);
+    height: min(90vw, 90vh, 500px);
     border: 3px solid #5a3a22;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .square {
@@ -21,6 +27,11 @@
     justify-content: center;
     align-items: center;
     cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    /* Фиксированный размер для стабильности */
+    min-height: 0;
+    box-sizing: border-box;
 }
 
 .square.dark {
@@ -32,46 +43,240 @@
 }
 
 .square.selected {
-    border: 3px solid #64ffda;
-    box-sizing: border-box;
+    background-color: rgba(100, 255, 218, 0.3) !important;
+    box-shadow: inset 0 0 0 3px #64ffda;
 }
 
 .piece {
-    width: 80%;
-    height: 80%;
+    /* КРИТИЧЕСКИ ВАЖНО: Фиксированные размеры для всех фигур */
+    width: 75%;
+    height: 75%;
+    min-width: 30px;
+    min-height: 30px;
+    max-width: 50px;
+    max-height: 50px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.5rem;
     font-weight: bold;
-    box-shadow: inset 0 -4px 6px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.3);
+    box-shadow: inset 0 -3px 5px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.3);
+    transition: transform 0.2s ease;
+    position: relative;
+    /* Фиксированный размер шрифта для короны */
+    font-size: clamp(1rem, 2.5vw, 1.8rem);
+    line-height: 1;
+}
+
+.piece:hover {
+    transform: scale(1.05);
 }
 
 .player0 {
     background-color: #1e1e1e; /* Черные */
-    color: white;
+    color: #ffd700; /* Золотая корона для контраста */
     border: 2px solid #333;
 }
+
 .player1 {
-    background-color: #f5f5f5; /* Белые (ходят первыми) */
-    color: black;
+    background-color: #f5f5f5; /* Белые */
+    color: #8b4513; /* Коричневая корона для контраста */
     border: 2px solid #ccc;
-    box-shadow: inset 0 -4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: inset 0 -3px 5px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* Добавляем hover эффект для интерактивности */
+/* Улучшенные hover эффекты */
 .square:hover {
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
-.square.selected {
-    border: 3px solid #64ffda;
-    box-sizing: border-box;
-    background-color: rgba(100, 255, 218, 0.2) !important;
-}
-
-/* Улучшаем визуализацию возможных ходов */
 .square.dark:hover {
     background-color: #a0522d;
+}
+
+.square.light:hover {
+    background-color: #e6d3a7;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .boardContainer {
+        padding: 0.5rem;
+    }
+    
+    .board {
+        width: min(95vw, 95vh, 400px);
+        height: min(95vw, 95vh, 400px);
+        border-width: 2px;
+    }
+    
+    .piece {
+        min-width: 25px;
+        min-height: 25px;
+        max-width: 40px;
+        max-height: 40px;
+        font-size: clamp(0.8rem, 2vw, 1.4rem);
+    }
+}
+
+@media (max-width: 480px) {
+    .board {
+        width: min(98vw, 98vh, 350px);
+        height: min(98vw, 98vh, 350px);
+    }
+    
+    .piece {
+        min-width: 20px;
+        min-height: 20px;
+        max-width: 35px;
+        max-height: 35px;
+        font-size: clamp(0.7rem, 1.8vw, 1.2rem);
+    }
+}
+
+/* Стили для подсветки возможных ходов */
+.possibleMove {
+    position: relative;
+}
+
+.possibleMove.dark {
+    background-color: #a0522d !important;
+    box-shadow: inset 0 0 0 2px #ffd700;
+}
+
+.possibleMove.light {
+    background-color: #e6d3a7 !important;
+}
+
+/* Индикатор возможного хода (пустая клетка) */
+.moveIndicator {
+    width: 30%;
+    height: 30%;
+    border-radius: 50%;
+    background-color: #22c55e;
+    border: 2px solid #16a34a;
+    opacity: 0.8;
+    animation: pulse 2s infinite;
+}
+
+/* Индикатор возможного взятия */
+.captureIndicator {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 20px;
+    height: 20px;
+    background-color: #ef4444;
+    border: 2px solid #dc2626;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: white;
+    font-weight: bold;
+    animation: bounce 1s infinite;
+}
+
+.captureIndicator::after {
+    content: '×';
+}
+
+/* Drag & Drop стили */
+.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+    transition: all 0.2s ease;
+}
+
+.dragOver {
+    background-color: rgba(34, 197, 94, 0.3) !important;
+    box-shadow: inset 0 0 0 3px #22c55e;
+    animation: dragOverPulse 0.5s ease-in-out infinite alternate;
+}
+
+.piece[draggable="true"] {
+    cursor: grab;
+}
+
+.piece[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+/* Анимации */
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@keyframes dragOverPulse {
+    0% {
+        box-shadow: inset 0 0 0 3px #22c55e;
+    }
+    100% {
+        box-shadow: inset 0 0 0 5px #22c55e;
+    }
+}
+
+/* Анимация для плавных переходов */
+.piece {
+    animation: pieceAppear 0.3s ease-out;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+@keyframes pieceAppear {
+    from {
+        transform: scale(0.8);
+        opacity: 0.7;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Улучшенные hover эффекты для интерактивности */
+.square.possibleMove:hover {
+    transform: scale(1.02);
+    transition: transform 0.1s ease;
+}
+
+/* Стили для мобильных устройств - убираем hover эффекты */
+@media (hover: none) and (pointer: coarse) {
+    .square:hover,
+    .square.dark:hover,
+    .square.light:hover,
+    .piece:hover,
+    .square.possibleMove:hover {
+        opacity: 1;
+        background-color: inherit;
+        transform: none;
+    }
+    
+    /* Увеличиваем размер индикаторов для мобильных */
+    .moveIndicator {
+        width: 40%;
+        height: 40%;
+    }
+    
+    .captureIndicator {
+        width: 24px;
+        height: 24px;
+        font-size: 14px;
+    }
 }

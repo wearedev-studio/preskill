@@ -124,18 +124,7 @@ function getMovesForPiece(board: (Piece | null)[], fromIndex: number): CheckersM
     }
     // --- Логика для "дамок" ---
     else {
-        // Простые ходы (в 4 направлениях на 1 клетку)
-        for (const dRow of [-1, 1]) {
-            for (const dCol of [-1, 1]) {
-                const toRow = fromRow + dRow;
-                const toCol = fromCol + dCol;
-                const toIndex = toRow * 8 + toCol;
-                if (toRow >= 0 && toRow < 8 && toCol >= 0 && toCol < 8 && board[toIndex] === null) {
-                    moves.push({ from: fromIndex, to: toIndex, isCapture: false });
-                }
-            }
-        }
-        // "Летающее" взятие (в 4 направлениях на любое расстояние)
+        // Дамки ходят в 4 направлениях на любое расстояние
         for (const dRow of [-1, 1]) {
             for (const dCol of [-1, 1]) {
                 let capturedPiece: Piece | null = null;
@@ -149,14 +138,27 @@ function getMovesForPiece(board: (Piece | null)[], fromIndex: number): CheckersM
                     if (currentRow < 0 || currentRow >= 8 || currentCol < 0 || currentCol >= 8) break;
 
                     const currentPiece = board[currentIndex];
+                    
                     if (currentPiece) {
-                        if (currentPiece.playerIndex === piece.playerIndex) break; // Своя фигура, путь закрыт
-                        if (capturedPiece) break; // Вторая фигура противника, путь закрыт
+                        if (currentPiece.playerIndex === piece.playerIndex) {
+                            // Своя фигура - путь закрыт
+                            break;
+                        }
+                        if (capturedPiece) {
+                            // Вторая фигура противника - путь закрыт
+                            break;
+                        }
+                        // Первая фигура противника
                         capturedPiece = currentPiece;
                         capturedIndex = currentIndex;
-                    } else if (capturedPiece) {
-                        // Если нашли пустую клетку после фигуры противника - это валидный ход
-                        moves.push({ from: fromIndex, to: currentIndex, isCapture: true });
+                    } else {
+                        if (capturedPiece) {
+                            // Пустая клетка после фигуры противника - взятие
+                            moves.push({ from: fromIndex, to: currentIndex, isCapture: true });
+                        } else {
+                            // Пустая клетка без взятия - обычный ход
+                            moves.push({ from: fromIndex, to: currentIndex, isCapture: false });
+                        }
                     }
                 }
             }
@@ -311,21 +313,33 @@ export const checkersLogic: IGameLogic = {
             return { isGameOver: true, winnerId: players[0].user._id.toString(), isDraw: false };
         }
         
-        // Находим, чей ход должен быть СЛЕДУЮЩИМ, чтобы проверить, есть ли у него ходы
+        // Находим индексы обоих игроков
+        // @ts-ignore
+        const currentPlayerIndex = players.findIndex(p => p.user._id.toString() === currentPlayerId) as 0 | 1;
         // @ts-ignore
         const nextPlayer = players.find(p => p.user._id.toString() !== currentPlayerId);
         // @ts-ignore
-        const nextPlayerIndex = players.findIndex(p => p.user._id.toString() === nextPlayer.user._id.toString()) as 0 | 1;
+        const nextPlayerIndex = players.findIndex(p => p.user._id.toString() === nextPlayer?.user._id.toString()) as 0 | 1;
 
         if (!nextPlayer) {
             // Если второго игрока нет, игра не может продолжаться (теоретическая ситуация)
             return { isGameOver: true, winnerId: currentPlayerId, isDraw: false };
         }
         
-        // Условие 2: У следующего игрока нет доступных ходов
+        // Условие 2: Проверяем доступные ходы для текущего игрока
+        // Если у текущего игрока нет ходов, он проиграл (заблокирован)
+        const legalMovesForCurrentPlayer = getAllLegalMoves(board, currentPlayerIndex);
+        if (legalMovesForCurrentPlayer.length === 0) {
+            // Текущий игрок заблокирован и проиграл
+            // @ts-ignore
+            return { isGameOver: true, winnerId: nextPlayer.user._id.toString(), isDraw: false };
+        }
+        
+        // Условие 3: Проверяем доступные ходы для следующего игрока
+        // Если у следующего игрока нет ходов, он проиграл (заблокирован)
         const legalMovesForNextPlayer = getAllLegalMoves(board, nextPlayerIndex);
         if (legalMovesForNextPlayer.length === 0) {
-            // Текущий игрок победил, так как заблокировал противника
+            // Следующий игрок заблокирован и проиграл
             return { isGameOver: true, winnerId: currentPlayerId, isDraw: false };
         }
 
