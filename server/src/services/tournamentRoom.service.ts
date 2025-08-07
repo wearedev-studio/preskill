@@ -696,25 +696,36 @@ async function accelerateBotMatches(io: Server, tournament: ITournament, current
                         
                         console.log(`[TournamentRoom] Accelerated bot match ${room.matchId}, winner: ${winner.username}`);
                         acceleratedAny = true;
+                        
+                        // КРИТИЧЕСКИ ВАЖНО: После каждого ускоренного матча перепроверяем турнир
+                        setTimeout(async () => {
+                            try {
+                                const updatedTournament = await Tournament.findById(tournament._id);
+                                if (updatedTournament) {
+                                    console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after bot vs bot match`);
+                                    await checkAndCreateNextRound(io, updatedTournament);
+                                }
+                            } catch (error) {
+                                console.error(`[TournamentRoom] Error in recheck after bot vs bot match:`, error);
+                            }
+                        }, 500); // Быстрая перепроверка для бот-матчей
                     }
                 }
             }
         }
         
-        // КРИТИЧЕСКИ ВАЖНО: После ускорения матчей перепроверяем раунд
-        if (acceleratedAny) {
-            console.log(`[TournamentRoom] Accelerated bot matches, rechecking tournament ${tournament._id}`);
-            setTimeout(async () => {
-                try {
-                    const updatedTournament = await Tournament.findById(tournament._id);
-                    if (updatedTournament) {
-                        await checkAndCreateNextRound(io, updatedTournament);
-                    }
-                } catch (error) {
-                    console.error(`[TournamentRoom] Error in recheck after acceleration:`, error);
+        // КРИТИЧЕСКИ ВАЖНО: ВСЕГДА перепроверяем турнир после вызова accelerateBotMatches
+        console.log(`[TournamentRoom] Rechecking tournament ${tournament._id} after accelerateBotMatches call`);
+        setTimeout(async () => {
+            try {
+                const updatedTournament = await Tournament.findById(tournament._id);
+                if (updatedTournament) {
+                    await checkAndCreateNextRound(io, updatedTournament);
                 }
-            }, 1000); // Небольшая задержка для завершения всех операций
-        }
+            } catch (error) {
+                console.error(`[TournamentRoom] Error in recheck after accelerateBotMatches:`, error);
+            }
+        }, 1500); // Достаточная задержка для завершения всех операций
     } catch (error) {
         console.error(`[TournamentRoom] Error accelerating bot matches:`, error);
     }

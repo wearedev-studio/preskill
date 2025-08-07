@@ -554,7 +554,16 @@ export const initializeSocket = (io: Server) => {
             // @ts-ignore
             const currentPlayerId = initialUser._id.toString();
 
-            if (!room || room.players.length < 2 || room.gameState.turn !== currentPlayerId) return;
+            // Проверяем базовые условия и отправляем соответствующие ошибки
+            if (!room) {
+                return socket.emit('error', { message: 'Комната не найдена' });
+            }
+            if (room.players.length < 2) {
+                return socket.emit('error', { message: 'Дождитесь второго игрока' });
+            }
+            if (room.gameState.turn !== currentPlayerId) {
+                return socket.emit('error', { message: 'Сейчас не ваш ход' });
+            }
 
             const gameLogic = gameLogics[room.gameType];
             
