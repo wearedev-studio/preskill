@@ -73,10 +73,8 @@ const TournamentGamePage: React.FC = () => {
             return;
         }
 
-        // Подключаемся к турнирной игре
         socket.emit('joinTournamentGame', matchId);
 
-        // Слушаем события турнирной игры
         socket.on('tournamentGameStart', handleGameStart);
         socket.on('tournamentGameUpdate', handleGameUpdate);
         socket.on('tournamentGameEnd', handleGameEnd);
@@ -116,7 +114,6 @@ const TournamentGamePage: React.FC = () => {
         console.log('[TournamentGame] Game ended:', result);
         setGameResult(result);
         
-        // НЕ перенаправляем автоматически - ждем события tournamentMatchResult
     };
 
     const handleMatchResult = (result: TournamentMatchResult) => {
@@ -124,20 +121,16 @@ const TournamentGamePage: React.FC = () => {
         setMatchResult(result);
         
         if (result.type === 'ELIMINATED') {
-            // Игрок выбыл - через 5 секунд возвращаемся к турнирам
             setTimeout(() => {
                 navigate('/tournaments');
             }, 5000);
         } else if (result.type === 'ADVANCED') {
-            // Игрок прошел в следующий раунд - показываем сообщение и ждем следующий матч
-            // Автоматический переход произойдет при получении tournamentMatchReady
         }
     };
 
     const handleNextRoundReady = (data: any) => {
         console.log('[TournamentGame] Next round ready:', data);
         
-        // Перенаправляем к следующему матчу
         if (data.matchId) {
             navigate(`/tournament-game/${data.matchId}`);
         }
@@ -147,7 +140,6 @@ const TournamentGamePage: React.FC = () => {
         console.log('[TournamentGame] Tournament completed:', data);
         setTournamentCompleted(data);
         
-        // Через 10 секунд возвращаемся к турнирам
         setTimeout(() => {
             navigate('/tournaments');
         }, 10000);
@@ -163,7 +155,6 @@ const TournamentGamePage: React.FC = () => {
         console.log('[TournamentGame] Game error:', data);
         if (data.matchId === matchId) {
             setGameError(data.error);
-            // Убираем ошибку через 3 секунды
             setTimeout(() => setGameError(null), 3000);
         }
     };
@@ -187,7 +178,6 @@ const TournamentGamePage: React.FC = () => {
         if (!socket || !matchId) return;
         
         console.log('[TournamentGame] Rolling dice');
-        // Для турнирных игр используем специальное событие
         socket.emit('tournamentMove', {
             matchId,
             move: { type: 'ROLL_DICE' }
@@ -282,7 +272,6 @@ const TournamentGamePage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Показываем статус в турнире */}
                     {matchResult && (
                         <div className={styles.tournamentStatus}>
                             <h3>Статус в турнире:</h3>
@@ -446,7 +435,6 @@ const TournamentGamePage: React.FC = () => {
                 {renderGameBoard()}
             </div>
 
-            {/* Показываем ошибки игры */}
             {gameError && (
                 <div className={styles.gameErrorMessage}>
                     <div className={styles.errorContent}>

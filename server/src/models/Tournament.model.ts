@@ -1,6 +1,5 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
-// Интерфейс для игрока турнира
 export interface ITournamentPlayer {
     _id: string;
     username: string;
@@ -9,7 +8,6 @@ export interface ITournamentPlayer {
     registeredAt: Date;
 }
 
-// Интерфейс для матча в турнирной сетке
 export interface ITournamentMatch {
     matchId: Types.ObjectId;
     player1: ITournamentPlayer;
@@ -18,13 +16,11 @@ export interface ITournamentMatch {
     status: 'WAITING' | 'PENDING' | 'ACTIVE' | 'FINISHED';
 }
 
-// Интерфейс для раунда турнира
 export interface ITournamentRound {
     round: number;
     matches: ITournamentMatch[];
 }
 
-// Интерфейс для документа турнира
 export interface ITournament extends Document {
     _id: Types.ObjectId;
     name: string;
@@ -44,7 +40,6 @@ export interface ITournament extends Document {
     updatedAt: Date;
 }
 
-// Схема для игрока турнира
 const tournamentPlayerSchema = new Schema({
     _id: { type: String, required: true },
     username: { type: String, required: true },
@@ -53,7 +48,6 @@ const tournamentPlayerSchema = new Schema({
     registeredAt: { type: Date, required: true, default: Date.now }
 }, { _id: false });
 
-// Схема для матча турнира
 const tournamentMatchSchema = new Schema({
     matchId: { type: Schema.Types.ObjectId, required: true, default: () => new Types.ObjectId() },
     player1: { type: tournamentPlayerSchema, required: true },
@@ -67,13 +61,11 @@ const tournamentMatchSchema = new Schema({
     }
 }, { _id: false });
 
-// Схема для раунда турнира
 const tournamentRoundSchema = new Schema({
     round: { type: Number, required: true },
     matches: [tournamentMatchSchema]
 }, { _id: false });
 
-// Основная схема турнира
 const tournamentSchema = new Schema<ITournament>({
     name: { 
         type: String, 
@@ -106,7 +98,7 @@ const tournamentSchema = new Schema<ITournament>({
     maxPlayers: {
         type: Number,
         required: true,
-        enum: [4, 8, 16, 32], // Только степени двойки для олимпийской системы
+        enum: [4, 8, 16, 32],
         default: 8
     },
     players: [tournamentPlayerSchema],
@@ -126,12 +118,10 @@ const tournamentSchema = new Schema<ITournament>({
     timestamps: true
 });
 
-// Индексы для оптимизации запросов
 tournamentSchema.index({ status: 1, createdAt: -1 });
 tournamentSchema.index({ gameType: 1, status: 1 });
 tournamentSchema.index({ 'players._id': 1 });
 
-// Виртуальные поля
 tournamentSchema.virtual('isActive').get(function() {
     return this.status === 'ACTIVE';
 });
@@ -156,7 +146,6 @@ tournamentSchema.virtual('isFull').get(function() {
     return this.players.length >= this.maxPlayers;
 });
 
-// Методы экземпляра
 tournamentSchema.methods.addPlayer = function(player: ITournamentPlayer) {
     if (this.isFull) {
         throw new Error('Tournament is full');
@@ -170,7 +159,6 @@ tournamentSchema.methods.addPlayer = function(player: ITournamentPlayer) {
     
     this.players.push(player);
     
-    // Устанавливаем время первой регистрации
     if (!this.firstRegistrationTime) {
         this.firstRegistrationTime = new Date();
     }
@@ -190,7 +178,6 @@ tournamentSchema.methods.removePlayer = function(playerId: string) {
     
     this.players.splice(playerIndex, 1);
     
-    // Сбрасываем время первой регистрации если нет игроков
     if (this.players.length === 0) {
         this.firstRegistrationTime = undefined;
     }
@@ -236,7 +223,6 @@ tournamentSchema.methods.cancel = function() {
     return this;
 };
 
-// Статические методы
 tournamentSchema.statics.findActive = function() {
     return this.find({ status: { $in: ['WAITING', 'ACTIVE'] } }).sort({ createdAt: -1 });
 };
@@ -249,9 +235,7 @@ tournamentSchema.statics.findByPlayer = function(playerId: string) {
     return this.find({ 'players._id': playerId }).sort({ createdAt: -1 });
 };
 
-// Middleware
 tournamentSchema.pre('save', function(next) {
-    // Автоматически рассчитываем призовой фонд
     if (this.isModified('players') || this.isModified('entryFee')) {
         const totalEntry = this.players.length * this.entryFee;
         this.prizePool = totalEntry;
@@ -260,7 +244,6 @@ tournamentSchema.pre('save', function(next) {
     next();
 });
 
-// Экспорт модели
 const Tournament = mongoose.model<ITournament>('Tournament', tournamentSchema);
 
 export default Tournament;

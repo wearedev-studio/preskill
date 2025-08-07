@@ -7,15 +7,9 @@ import { createNotification } from './notification.service';
 import { gameLogics } from '../socket';
 import { advanceTournamentWinner } from './tournament.service';
 
-// Хранилище активных турнирных комнат в памяти (отдельно от обычных комнат)
 export const tournamentRooms: Record<string, ITournamentRoom> = {};
-
-// Хранилище сокетов игроков в турнирных комнатах
 export const tournamentPlayerSockets: Record<string, string> = {};
 
-/**
- * Создает турнирную комнату для матча
- */
 export async function createTournamentRoom(
     io: Server,
     tournamentId: string,
@@ -73,14 +67,10 @@ export async function createTournamentRoom(
     }
 }
 
-/**
- * Уведомляет игроков о готовности матча
- */
 async function notifyPlayersAboutMatch(io: Server, room: ITournamentRoom) {
     const tournament = await Tournament.findById(room.tournamentId);
     if (!tournament) return;
 
-    // Определяем, какой это раунд
     let currentRound = 1;
     for (const round of tournament.bracket) {
         const matchInRound = round.matches.find(m => m.matchId.toString() === room.matchId);
@@ -96,7 +86,6 @@ async function notifyPlayersAboutMatch(io: Server, room: ITournamentRoom) {
             if (socket) {
                 const opponent = room.players.find(p => p._id !== player._id);
                 
-                // Отправляем событие о готовности матча
                 socket.emit('tournamentMatchReady', {
                     tournamentId: room.tournamentId,
                     matchId: room.matchId,
@@ -105,7 +94,6 @@ async function notifyPlayersAboutMatch(io: Server, room: ITournamentRoom) {
                     opponent: opponent
                 });
 
-                // Создаем уведомление
                 const roundText = currentRound === 1 ? 'Первый раунд' :
                                 currentRound === 2 ? 'Полуфинал' :
                                 currentRound === 3 ? 'Финал' : `Раунд ${currentRound}`;
@@ -122,9 +110,6 @@ async function notifyPlayersAboutMatch(io: Server, room: ITournamentRoom) {
     }
 }
 
-/**
- * Подключает игрока к турнирной комнате
- */
 export async function joinTournamentRoom(
     io: Server,
     socket: any,
@@ -198,9 +183,6 @@ export async function joinTournamentRoom(
     }
 }
 
-/**
- * Обрабатывает ход игрока в турнирной комнате
- */
 export async function processTournamentMove(
     io: Server,
     socket: any,
@@ -215,7 +197,6 @@ export async function processTournamentMove(
             return;
         }
 
-        // Проверяем, что это ход игрока (пропускаем для ботов)
         const isBot = room.players.find(p => p._id === playerId)?.isBot;
         if (!isBot && room.gameState.turn && room.gameState.turn.toString() !== playerId.toString()) {
             if (socket) socket.emit('error', { message: 'Сейчас не ваш ход' });
@@ -229,7 +210,6 @@ export async function processTournamentMove(
             return;
         }
 
-        // Обрабатываем ход
         const roomPlayers = room.players.map(p => ({
             socketId: p.socketId || 'offline',
             user: {
@@ -242,9 +222,7 @@ export async function processTournamentMove(
 
         let newState, error;
 
-        // Специальная обработка для ботов
         if (isBot && move.type === 'BOT_MOVE') {
-            // Для ботов генерируем ход автоматически
             const botPlayerIndex = room.players.findIndex(p => p._id === playerId) as 0 | 1;
             const botMove = gameLogic.makeBotMove(room.gameState, botPlayerIndex);
             
@@ -257,14 +235,12 @@ export async function processTournamentMove(
             newState = result.newState;
             error = result.error;
         }
-        // Специальная обработка для броска костей в нардах
         else if (room.gameType === 'backgammon' && move.type === 'ROLL_DICE') {
             const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
             const result = rollDiceForBackgammon(room.gameState, playerId, roomPlayers);
             newState = result.newState;
             error = result.error;
         } else {
-            // Обычная обработка хода
             const result = gameLogic.processMove(
                 room.gameState,
                 move,
@@ -276,7 +252,6 @@ export async function processTournamentMove(
         }
 
         if (error) {
-            // НЕ завершаем игру при ошибке хода - просто отправляем ошибку игроку
             if (socket) {
                 socket.emit('tournamentGameError', {
                     matchId,
@@ -284,23 +259,20 @@ export async function processTournamentMove(
                 });
             }
             console.log(`[TournamentRoom] Move error in match ${matchId}: ${error}`);
-            return; // Возвращаемся без обновления состояния
+            return;
         }
 
-        // Обновляем состояние
         room.gameState = newState;
         if (tournamentRooms[matchId]) {
             tournamentRooms[matchId] = room;
         }
         await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: newState });
 
-        // Отправляем обновление всем в комнате
         io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
             matchId,
             gameState: newState
         });
 
-        // Проверяем конец игры
         const gameResult = gameLogic.checkGameEnd(newState, roomPlayers);
         console.log(`[TournamentRoom] Game result check for match ${matchId}:`, gameResult);
         
@@ -310,7 +282,6 @@ export async function processTournamentMove(
             return;
         }
 
-        // Логика для хода бота
         const nextPlayer = room.players.find(p => p._id === newState.turn);
         if (nextPlayer && nextPlayer.isBot) {
             console.log(`[TournamentRoom] Bot ${nextPlayer.username} should make a move`);
@@ -320,11 +291,9 @@ export async function processTournamentMove(
                     const currentRoom = tournamentRooms[matchId] || await TournamentRoom.findOne({ matchId });
                     if (!currentRoom || currentRoom.status !== 'ACTIVE') return;
 
-                    // Специальная логика для нард - бот должен бросить кости
                     if (currentRoom.gameType === 'backgammon') {
                         const botPlayerId = nextPlayer._id;
                         
-                        // Проверяем, нужно ли боту бросить кости
                         if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
                             const { rollDiceForBackgammon } = await import('../games/backgammon.logic');
                             const { newState: diceState, error: diceError } = rollDiceForBackgammon(
@@ -349,17 +318,14 @@ export async function processTournamentMove(
                                 gameState: diceState
                             });
                             
-                            // Если после броска костей нет доступных ходов, ход уже переключился
                             if ((currentRoom.gameState as any).turnPhase === 'ROLLING') {
                                 return;
                             }
                             
-                            // Небольшая задержка перед ходами
                             await new Promise(resolve => setTimeout(resolve, 1000));
                         }
                     }
 
-                    // Делаем ходы бота
                     let botCanMove = true;
                     let safetyBreak = 0;
 
@@ -386,7 +352,6 @@ export async function processTournamentMove(
                         }
                         await TournamentRoom.findOneAndUpdate({ matchId }, { gameState: botProcessResult.newState });
                         
-                        // Проверяем конец игры после хода бота
                         const botGameResult = gameLogic.checkGameEnd(currentRoom.gameState, roomPlayers);
                         if (botGameResult.isGameOver) {
                             await finishTournamentMatch(io, currentRoom, botGameResult.winnerId, botGameResult.isDraw);
@@ -395,13 +360,11 @@ export async function processTournamentMove(
                         
                         botCanMove = !botProcessResult.turnShouldSwitch;
                         
-                        // Для нард: если ход переключился, выходим из цикла
                         if (currentRoom.gameType === 'backgammon' && botProcessResult.turnShouldSwitch) {
                             break;
                         }
                     }
 
-                    // Отправляем финальное обновление
                     io.to(`tournament-${matchId}`).emit('tournamentGameUpdate', {
                         matchId,
                         gameState: currentRoom.gameState
@@ -410,7 +373,7 @@ export async function processTournamentMove(
                 } catch (error) {
                     console.error(`[TournamentRoom] Error in bot move:`, error);
                 }
-            }, 1500); // Задержка для бота
+            }, 1500);
         }
 
         console.log(`[TournamentRoom] Processed move in match ${matchId}`);
@@ -420,9 +383,6 @@ export async function processTournamentMove(
     }
 }
 
-/**
- * Завершает турнирный матч
- */
 async function finishTournamentMatch(
     io: Server,
     room: ITournamentRoom,
@@ -484,9 +444,6 @@ async function finishTournamentMatch(
     }
 }
 
-/**
- * Уведомляет игроков о результате матча и их статусе в турнире
- */
 async function notifyPlayersAboutMatchResult(
     io: Server,
     room: ITournamentRoom,
@@ -549,9 +506,6 @@ async function notifyPlayersAboutMatchResult(
     }
 }
 
-/**
- * Продвигает победителя в турнире (локальная версия)
- */
 async function advanceWinnerInTournament(
     io: Server,
     tournamentId: string,
@@ -600,9 +554,6 @@ async function advanceWinnerInTournament(
     }
 }
 
-/**
- * Проверяет и создает следующий раунд турнира
- */
 async function checkAndCreateNextRound(io: Server, tournament: ITournament): Promise<void> {
     try {
         console.log(`[TournamentRoom] Checking next round for tournament ${tournament._id}`);
@@ -653,9 +604,6 @@ async function checkAndCreateNextRound(io: Server, tournament: ITournament): Pro
     }
 }
 
-/**
- * Ускоряет завершение матчей ботов в текущем раунде
- */
 async function accelerateBotMatches(io: Server, tournament: ITournament, currentRound: any): Promise<void> {
     try {
         let acceleratedAny = false;
@@ -731,9 +679,6 @@ async function accelerateBotMatches(io: Server, tournament: ITournament, current
     }
 }
 
-/**
- * Создает матчи следующего раунда
- */
 async function createNextRoundMatches(io: Server, tournament: ITournament, currentRoundIndex: number): Promise<void> {
     try {
         console.log(`[TournamentRoom] Creating next round matches for tournament ${tournament._id}`);
@@ -832,9 +777,6 @@ async function createNextRoundMatches(io: Server, tournament: ITournament, curre
     }
 }
 
-/**
- * Немедленно завершает матч между ботами
- */
 async function accelerateSingleBotMatch(io: Server, room: any, tournament: any): Promise<void> {
     try {
         console.log(`[TournamentRoom] Accelerating single bot match ${room.matchId}`);
@@ -886,9 +828,6 @@ async function accelerateSingleBotMatch(io: Server, room: any, tournament: any):
     }
 }
 
-/**
- * Завершает турнир
- */
 async function finishTournament(io: Server, tournament: ITournament, winner: any): Promise<void> {
     try {
         console.log(`[TournamentRoom] Finishing tournament ${tournament._id}, winner: ${winner.username}`);
@@ -944,9 +883,6 @@ async function finishTournament(io: Server, tournament: ITournament, winner: any
     }
 }
 
-/**
- * Распределяет призы между участниками
- */
 async function distributePrizes(io: Server, tournament: ITournament): Promise<void> {
     try {
         console.log(`[TournamentRoom] Distributing prizes for tournament ${tournament._id}`);

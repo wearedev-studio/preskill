@@ -9,9 +9,6 @@ import {
     getTournamentById 
 } from '../services/tournament.service';
 
-/**
- * Получить список всех турниров
- */
 export const getAllTournaments = async (req: Request, res: Response) => {
     try {
         const tournaments = await getActiveTournaments();
@@ -22,9 +19,6 @@ export const getAllTournaments = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Получить турнир по ID
- */
 export const getTournament = async (req: Request, res: Response) => {
     try {
         const { tournamentId } = req.params;
@@ -41,14 +35,10 @@ export const getTournament = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Создать новый турнир
- */
 export const createNewTournament = async (req: Request, res: Response) => {
     try {
         const { name, gameType, maxPlayers, entryFee, platformCommission } = req.body;
         
-        // Валидация входных данных
         if (!name || !gameType || !maxPlayers || entryFee === undefined) {
             return res.status(400).json({ 
                 message: 'Необходимо указать название, тип игры, количество игроков и взнос' 
@@ -68,7 +58,7 @@ export const createNewTournament = async (req: Request, res: Response) => {
         }
 
         const io: Server = req.app.get('io');
-        const prizePool = entryFee * maxPlayers; // Базовый призовой фонд
+        const prizePool = entryFee * maxPlayers;
         
         const tournament = await createTournament(
             io,
@@ -94,9 +84,6 @@ export const createNewTournament = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Регистрация в турнире
- */
 export const registerInTournament = async (req: Request, res: Response) => {
     try {
         const { tournamentId } = req.params;
@@ -106,7 +93,6 @@ export const registerInTournament = async (req: Request, res: Response) => {
             return res.status(401).json({ message: 'Необходима авторизация' });
         }
 
-        // Получаем socketId из сессии или заголовков
         const socketId = req.headers['x-socket-id'] as string || 'offline';
 
         const io: Server = req.app.get('io');
@@ -124,9 +110,6 @@ export const registerInTournament = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Отмена регистрации в турнире
- */
 export const unregisterFromTournament = async (req: Request, res: Response) => {
     try {
         const { tournamentId } = req.params;
@@ -145,30 +128,25 @@ export const unregisterFromTournament = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Нельзя отменить регистрацию после начала турнира' });
         }
 
-        // Проверяем, зарегистрирован ли игрок
         const playerIndex = tournament.players.findIndex(p => p._id === userId);
         if (playerIndex === -1) {
             return res.status(400).json({ message: 'Вы не зарегистрированы в этом турнире' });
         }
 
-        // Возвращаем взнос
         const user = await User.findById(userId);
         if (user) {
             user.balance += tournament.entryFee;
             await user.save();
         }
 
-        // Удаляем игрока
         tournament.players.splice(playerIndex, 1);
         
-        // Сбрасываем время первой регистрации если нет игроков
         if (tournament.players.length === 0) {
             tournament.firstRegistrationTime = undefined;
         }
 
         await tournament.save();
 
-        // Уведомляем всех об обновлении
         const io: Server = req.app.get('io');
         io.emit('tournamentUpdated', tournament);
 
@@ -179,9 +157,6 @@ export const unregisterFromTournament = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Получить турниры игрока
- */
 export const getPlayerTournaments = async (req: Request, res: Response) => {
     try {
         const userId = req.user?._id?.toString();
@@ -201,9 +176,6 @@ export const getPlayerTournaments = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Получить историю турниров
- */
 export const getTournamentHistory = async (req: Request, res: Response) => {
     try {
         const { page = 1, limit = 10, gameType } = req.query;
@@ -235,9 +207,6 @@ export const getTournamentHistory = async (req: Request, res: Response) => {
     }
 };
 
-/**
- * Получить статистику турниров
- */
 export const getTournamentStats = async (req: Request, res: Response) => {
     try {
         const stats = await Tournament.aggregate([

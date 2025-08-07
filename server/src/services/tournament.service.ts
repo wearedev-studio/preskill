@@ -6,13 +6,10 @@ import { createNotification } from './notification.service';
 import { createTournamentRoom } from './tournamentRoom.service';
 import { Types } from 'mongoose';
 
-// Хранилище активных турниров в памяти
 export const activeTournaments: Record<string, ITournament> = {};
 
-// Хранилище таймеров турниров
 const tournamentTimers: Record<string, NodeJS.Timeout> = {};
 
-// Конфигурация ботов
 const BOT_NAMES = [
     'AlphaBot', 'BetaBot', 'GammaBot', 'DeltaBot', 'EpsilonBot',
     'ZetaBot', 'EtaBot', 'ThetaBot', 'IotaBot', 'KappaBot',
@@ -20,9 +17,6 @@ const BOT_NAMES = [
     'PiBot', 'RhoBot', 'SigmaBot', 'TauBot', 'UpsilonBot'
 ];
 
-/**
- * Создает новый турнир
- */
 export async function createTournament(
     io: Server,
     name: string,
@@ -35,7 +29,6 @@ export async function createTournament(
     try {
         console.log(`[Tournament] Creating tournament: ${name}, ${gameType}, ${maxPlayers} players`);
 
-        // Проверяем валидность параметров
         if (![4, 8, 16, 32].includes(maxPlayers)) {
             throw new Error('Количество игроков должно быть 4, 8, 16 или 32');
         }
@@ -44,7 +37,6 @@ export async function createTournament(
             throw new Error('Неподдерживаемый тип игры');
         }
 
-        // Создаем турнир
         const tournament = new Tournament({
             name,
             gameType,
@@ -61,10 +53,8 @@ export async function createTournament(
 
         await tournament.save();
 
-        // Добавляем в память
         activeTournaments[tournament._id.toString()] = tournament;
 
-        // Уведомляем всех о новом турнире
         io.emit('tournamentCreated', tournament);
 
         console.log(`[Tournament] Created tournament ${tournament._id}`);
@@ -75,9 +65,6 @@ export async function createTournament(
     }
 }
 
-/**
- * Регистрирует игрока в турнире
- */
 export async function registerPlayerInTournament(
     io: Server,
     tournamentId: string,
@@ -96,39 +83,32 @@ export async function registerPlayerInTournament(
             return { success: false, message: 'Турнир уже начался или завершен' };
         }
 
-        // Проверяем, не зарегистрирован ли игрок уже
         if (tournament.players.some(p => p._id === userId)) {
             return { success: false, message: 'Вы уже зарегистрированы в этом турнире' };
         }
 
-        // Проверяем лимит игроков
         if (tournament.players.length >= tournament.maxPlayers) {
             return { success: false, message: 'Турнир заполнен' };
         }
 
-        // Получаем данные пользователя
         const user = await User.findById(userId);
         if (!user) {
             return { success: false, message: 'Пользователь не найден' };
         }
 
-        // Проверяем баланс
         if (user.balance < tournament.entryFee) {
             return { success: false, message: 'Недостаточно средств для участия' };
         }
 
-        // Списываем взнос
         user.balance -= tournament.entryFee;
         await user.save();
 
-        // Создаем транзакцию
         await new Transaction({
             user: userId,
             type: 'TOURNAMENT_FEE',
             amount: -tournament.entryFee
         }).save();
 
-        // Добавляем игрока
         const player: ITournamentPlayer = {
             _id: userId,
             username: user.username,
@@ -139,11 +119,9 @@ export async function registerPlayerInTournament(
 
         tournament.players.push(player);
 
-        // Устанавливаем время первой регистрации
         if (!tournament.firstRegistrationTime) {
             tournament.firstRegistrationTime = new Date();
             
-            // Запускаем 15-секундный таймер
             const timer = setTimeout(() => {
                 startTournamentWithBots(io, tournamentId);
             }, 15000);
@@ -152,14 +130,11 @@ export async function registerPlayerInTournament(
             console.log(`[Tournament] Started 15-second timer for tournament ${tournamentId}`);
         }
 
-        // Сохраняем изменения
         await tournament.save();
         activeTournaments[tournamentId] = tournament;
 
-        // Уведомляем всех об обновлении
         io.emit('tournamentUpdated', tournament);
 
-        // Уведомляем игрока
         await createNotification(io, userId, {
             title: `🎯 Регистрация в турнире "${tournament.name}"`,
             message: `Вы успешно зарегистрированы! Игроков: ${tournament.players.length}/${tournament.maxPlayers}`,
@@ -168,9 +143,7 @@ export async function registerPlayerInTournament(
 
         console.log(`[Tournament] Player ${user.username} registered in tournament ${tournamentId}`);
 
-        // Проверяем, заполнен ли турнир
         if (tournament.players.length === tournament.maxPlayers) {
-            // Отменяем таймер и сразу запускаем турнир
             if (tournamentTimers[tournamentId]) {
                 clearTimeout(tournamentTimers[tournamentId]);
                 delete tournamentTimers[tournamentId];
@@ -185,9 +158,6 @@ export async function registerPlayerInTournament(
     }
 }
 
-/**
- * Запускает турнир с заполнением ботами
- */
 async function startTournamentWithBots(io: Server, tournamentId: string): Promise<void> {
     try {
         console.log(`[Tournament] Starting tournament ${tournamentId} with bots`);
@@ -198,13 +168,11 @@ async function startTournamentWithBots(io: Server, tournamentId: string): Promis
             return;
         }
 
-        // Очищаем таймер
         if (tournamentTimers[tournamentId]) {
             clearTimeout(tournamentTimers[tournamentId]);
             delete tournamentTimers[tournamentId];
         }
 
-        // Заполняем ботами до нужного количества
         const botsNeeded = tournament.maxPlayers - tournament.players.length;
         if (botsNeeded > 0) {
             const usedBotNames = new Set();
@@ -237,9 +205,6 @@ async function startTournamentWithBots(io: Server, tournamentId: string): Promis
     }
 }
 
-/**
- * Запускает турнир
- */
 async function startTournament(io: Server, tournamentId: string): Promise<void> {
     try {
         console.log(`[Tournament] Starting tournament ${tournamentId}`);
@@ -250,23 +215,18 @@ async function startTournament(io: Server, tournamentId: string): Promise<void> 
             return;
         }
 
-        // Перемешиваем игроков для случайной сетки
         const shuffledPlayers = [...tournament.players].sort(() => Math.random() - 0.5);
 
-        // Создаем турнирную сетку
         const bracket = createTournamentBracket(shuffledPlayers);
         tournament.bracket = bracket;
         tournament.status = 'ACTIVE';
         tournament.startedAt = new Date();
 
-        // Сохраняем изменения
         await tournament.save();
         activeTournaments[tournamentId] = tournament;
 
-        // Уведомляем всех о начале турнира
         io.emit('tournamentStarted', tournament);
 
-        // Уведомляем игроков
         for (const player of tournament.players) {
             if (!player.isBot) {
                 await createNotification(io, player._id, {
@@ -279,16 +239,12 @@ async function startTournament(io: Server, tournamentId: string): Promise<void> 
 
         console.log(`[Tournament] Tournament ${tournamentId} started with ${tournament.players.length} players`);
 
-        // Создаем матчи первого раунда
         await createFirstRoundMatches(io, tournament);
     } catch (error) {
         console.error(`[Tournament] Error starting tournament:`, error);
     }
 }
 
-/**
- * Создает турнирную сетку
- */
 function createTournamentBracket(players: ITournamentPlayer[]): any[] {
     const bracket = [];
     const totalPlayers = players.length;
@@ -299,7 +255,6 @@ function createTournamentBracket(players: ITournamentPlayer[]): any[] {
         const matches = [];
         const nextRoundPlayers: ITournamentPlayer[] = [];
 
-        // Создаем пары для текущего раунда
         for (let i = 0; i < currentRoundPlayers.length; i += 2) {
             const player1 = currentRoundPlayers[i];
             const player2 = currentRoundPlayers[i + 1];
@@ -313,7 +268,6 @@ function createTournamentBracket(players: ITournamentPlayer[]): any[] {
             };
 
             matches.push(match);
-            // Добавляем временного игрока для следующего раунда (будет заменен на победителя)
             nextRoundPlayers.push({
                 _id: 'temp',
                 username: 'TBD',
@@ -335,9 +289,6 @@ function createTournamentBracket(players: ITournamentPlayer[]): any[] {
     return bracket;
 }
 
-/**
- * Создает матчи первого раунда
- */
 async function createFirstRoundMatches(io: Server, tournament: ITournament): Promise<void> {
     try {
         console.log(`[Tournament] Creating first round matches for tournament ${tournament._id}`);
@@ -348,7 +299,6 @@ async function createFirstRoundMatches(io: Server, tournament: ITournament): Pro
             return;
         }
 
-        // Создаем турнирные комнаты для каждого матча
         for (const match of firstRound.matches) {
             const players = [
                 {
@@ -377,20 +327,17 @@ async function createFirstRoundMatches(io: Server, tournament: ITournament): Pro
                 match.status = 'ACTIVE';
                 console.log(`[Tournament] Created room for match ${match.matchId}`);
 
-                // Если оба игрока боты, запускаем автоматическую игру
                 if (match.player1.isBot && match.player2.isBot) {
                     setTimeout(() => {
                         simulateBotVsBotMatch(io, room, tournament);
-                    }, 2000 + Math.random() * 3000); // 2-5 секунд задержки
+                    }, 2000 + Math.random() * 3000);
                 }
             }
         }
 
-        // Сохраняем изменения
         await tournament.save();
         activeTournaments[tournament._id.toString()] = tournament;
 
-        // Уведомляем об обновлении
         io.emit('tournamentUpdated', tournament);
 
         console.log(`[Tournament] Created ${firstRound.matches.length} matches for first round`);
@@ -399,32 +346,24 @@ async function createFirstRoundMatches(io: Server, tournament: ITournament): Pro
     }
 }
 
-/**
- * Симулирует матч между ботами
- */
 async function simulateBotVsBotMatch(io: Server, room: any, tournament: ITournament): Promise<void> {
     try {
         console.log(`[Tournament] Simulating bot vs bot match ${room.matchId}`);
 
-        // Случайно выбираем победителя
         const winner = room.players[Math.floor(Math.random() * room.players.length)];
 
-        // Имитируем время игры (30-120 секунд)
         const gameTime = 30000 + Math.random() * 90000;
 
         setTimeout(async () => {
-            // Обновляем статус комнаты
             room.status = 'FINISHED';
             room.winner = winner;
 
-            // Уведомляем о завершении матча
             io.to(`tournament-${room.matchId}`).emit('tournamentGameEnd', {
                 matchId: room.matchId,
                 winner,
                 isDraw: false
             });
 
-            // Продвигаем победителя
             await advanceTournamentWinner(io, tournament._id.toString(), room.matchId, winner);
 
             console.log(`[Tournament] Bot match ${room.matchId} finished, winner: ${winner.username}`);
@@ -434,9 +373,6 @@ async function simulateBotVsBotMatch(io: Server, room: any, tournament: ITournam
     }
 }
 
-/**
- * Продвигает победителя в следующий раунд
- */
 export async function advanceTournamentWinner(
     io: Server,
     tournamentId: string,
@@ -452,7 +388,6 @@ export async function advanceTournamentWinner(
             return;
         }
 
-        // Находим матч и записываем победителя
         let currentRoundIndex = -1;
         let matchIndex = -1;
 
@@ -475,23 +410,18 @@ export async function advanceTournamentWinner(
         match.winner = winner;
         match.status = 'FINISHED';
 
-        // Проверяем, завершен ли текущий раунд
         const currentRound = tournament.bracket[currentRoundIndex];
         const allMatchesFinished = currentRound.matches.every(m => m.status === 'FINISHED');
 
         if (allMatchesFinished) {
             console.log(`[Tournament] Round ${currentRound.round} finished`);
             
-            // Логика создания следующего раунда и завершения турнира
-            // теперь обрабатывается в tournamentRoom.service.ts
             console.log(`[Tournament] Round processing will be handled by tournament room service`);
         }
 
-        // Сохраняем изменения
         await tournament.save();
         activeTournaments[tournamentId] = tournament;
 
-        // Уведомляем об обновлении
         io.emit('tournamentUpdated', tournament);
 
         console.log(`[Tournament] Winner ${winner.username} advanced in tournament ${tournamentId}`);
@@ -500,12 +430,6 @@ export async function advanceTournamentWinner(
     }
 }
 
-// Функции createNextRoundMatches, finishTournament, distributePrizes и awardPrize
-// перенесены в tournamentRoom.service.ts для избежания дублирования
-
-/**
- * Получает список активных турниров
- */
 export async function getActiveTournaments(): Promise<ITournament[]> {
     try {
         const tournaments = await Tournament.find({
@@ -519,9 +443,6 @@ export async function getActiveTournaments(): Promise<ITournament[]> {
     }
 }
 
-/**
- * Получает турнир по ID
- */
 export async function getTournamentById(tournamentId: string): Promise<ITournament | null> {
     try {
         const tournament = activeTournaments[tournamentId] || await Tournament.findById(tournamentId);
@@ -532,9 +453,6 @@ export async function getTournamentById(tournamentId: string): Promise<ITourname
     }
 }
 
-/**
- * Очищает завершенные турниры из памяти
- */
 export function cleanupFinishedTournaments(): void {
     Object.keys(activeTournaments).forEach(tournamentId => {
         const tournament = activeTournaments[tournamentId];
@@ -545,5 +463,4 @@ export function cleanupFinishedTournaments(): void {
     });
 }
 
-// Запускаем очистку каждые 30 минут
 setInterval(cleanupFinishedTournaments, 30 * 60 * 1000);
